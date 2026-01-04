@@ -1,0 +1,5 @@
+This Agreement serves as the unified license agreement for Yushi Software, applying to both the Community Edition and the Commercial Editions.
+
+For the Community Edition, this Agreement incorporates and references the full text of the GNU Affero General Public License v3.0 (“AGPL-3.0”, available at: https://www.gnu.org/licenses/agpl-3.0.html ). Community Edition users must comply with the AGPL-3.0 License as well as the supplementary terms set forth in this Agreement. In case of any inconsistency between AGPL-3.0 and this Agreement, the supplementary terms of this Agreement shall prevail.
+
+ For the Commercial Edition, only the Commercial License terms contained in this Agreement apply. Commercial Edition users are not subject to AGPL-3.0 obligations.
