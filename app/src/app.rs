@@ -34,7 +34,7 @@ impl App {
             ActixApp::new()
                 .service(services::chat)
         })
-        .bind("127.0.0.1:22786")?
+        .bind("0.0.0.0:22786")?
         .run()
         .await
     }

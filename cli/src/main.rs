@@ -92,6 +92,14 @@ fn main() {
             let mut cargo_toml = std::fs::read_to_string(&cargo_toml_path)
                 .expect("Failed to read Cargo.toml");
             
+            let deps_pos = cargo_toml.find("[dependencies]").unwrap_or(cargo_toml.len());
+            let metadata = "description = \"Yushi AI Agent\"\nlicense = \"AGPL-3.0\"\nauthors = [\"Yushi yushi_app@163.com\"]\n";
+            if deps_pos < cargo_toml.len() {
+                cargo_toml.insert_str(deps_pos - 1, metadata);
+            } else {
+                cargo_toml.push_str(metadata);
+            }
+            
             let deps_section = "\n[dependencies]\n";
             if !cargo_toml.contains("[dependencies]") {
                 cargo_toml.push_str(deps_section);
@@ -100,7 +108,11 @@ fn main() {
             cargo_toml.push_str("rust-embed = \"8.9.0\"\n");
             cargo_toml.push_str("app.workspace = true\n");
             cargo_toml.push_str("jieyusha.workspace = true\n");
-            
+            cargo_toml.push_str("\n[package.metadata.deb]\n");
+            cargo_toml.push_str("assets = [\n");
+            cargo_toml.push_str("    [\"target/release/rk3588\", \"usr/bin/\", \"755\"],\n");
+            cargo_toml.push_str("]\n");
+
             std::fs::write(&cargo_toml_path, cargo_toml)
                 .expect("Failed to write to Cargo.toml");
             
@@ -175,24 +187,82 @@ top_p = 0.9       # Nucleus Sampling: Control diversity: 0.5 means only the top 
         
         Some(Commands::Build { args }) => {
             
-            let mut command = Command::new("cargo");
-            command.arg("build");
+            let mut cargo_args = vec!["build".to_string()];
+            let mut use_cross = false;
+            let mut is_release = false;
             
-            // Add any additional arguments passed to the build command
-            for arg in args {
-                command.arg(arg);
+            // Check if --target or --release is in the arguments
+            let mut iter = args.iter();
+            while let Some(arg) = iter.next() {
+                if arg == "--target" {
+                    use_cross = true;
+                    cargo_args.push(arg.clone());
+                    // Also add the target value
+                    if let Some(target) = iter.next() {
+                        cargo_args.push(target.clone());
+                    }
+                } else if arg.starts_with("--target=") {
+                    use_cross = true;
+                    cargo_args.push(arg.clone());
+                } else if arg == "--release" {
+                    is_release = true;
+                    cargo_args.push(arg.clone());
+                } else {
+                    cargo_args.push(arg.clone());
+                }
             }
             
-            let output = command
-                .output()
-                .expect("Failed to execute cargo build command");
+            let mut command = Command::new(if use_cross { "cross" } else { "cargo" });
+            for arg in &cargo_args {
+                command.arg(arg);
+            }
+
+            let status = command
+                .status()
+                .expect("Failed to execute build command");
                 
-            if !output.status.success() {
-                eprintln!("Failed to build agent: {}", String::from_utf8_lossy(&output.stderr));
-                std::process::exit(1);
+            if !status.success() {
+                eprintln!("Build failed with exit code: {:?}", status.code());
+                std::process::exit(status.code().unwrap_or(1));
             }
             
             println!("Successfully built agent");
+            
+            if is_release {
+                println!("Creating Debian package...");
+                
+                let mut target_arg = None;
+                let mut iter = args.iter();
+                while let Some(arg) = iter.next() {
+                    if arg == "--target" {
+                        if let Some(target) = iter.next() {
+                            target_arg = Some(target.clone());
+                        }
+                        break;
+                    } else if arg.starts_with("--target=") {
+                        target_arg = Some(arg[9..].to_string()); // Skip "--target=" prefix
+                        break;
+                    }
+                }
+                
+                let mut deb_command = Command::new("cargo");
+                deb_command.arg("deb").arg("--no-build");
+                
+                if let Some(target) = target_arg {
+                    deb_command.arg("--target").arg(target);
+                }
+
+                let status = deb_command
+                    .status()
+                    .expect("Failed to execute deb command");
+                    
+                if !status.success() {
+                    eprintln!("Deb packaging failed with exit code: {:?}", status.code());
+                    std::process::exit(status.code().unwrap_or(1));
+                }
+                
+                println!("Successfully created Debian package");
+            }
         }
 
         Some(Commands::Tool(tool_cmd)) => match tool_cmd {
