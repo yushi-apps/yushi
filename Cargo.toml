@@ -1,6 +1,6 @@
 [workspace]
 resolver = "3"
-members = [ "app", "cli", "jieyusha", "tools/file_read_tool" ]
+members = [ "app", "cli", "jieyusha", "model", "tools/file_read_tool" ]
 
 [workspace.dependencies]
 log = "0.4"

@@ -1,0 +1,20 @@
+[package]
+name    = "yushi-model"
+version = "0.1.0"
+edition = "2024"
+description = "SmallThinker 4B-A0.6B Q4_0 model files"
+license = "Apache-2.0"
+build   = false
+
+[lib]
+path = "src/lib.rs"
+
+[package.metadata.deb]
+name        = "yushi-model"
+maintainer  = "Yushi <yushi_app@163.com>"
+priority    = "optional"
+assets = [
+  ["SmallThinker-4B-A0.6B-Instruct.Q4_K.gguf", "/usr/share/yushi/model.gguf", "644"],
+]
+# 无依赖，可独立安装/卸载
+depends = ""

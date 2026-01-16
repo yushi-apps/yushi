@@ -2,6 +2,7 @@ use std::sync::Arc;
 use std::collections::HashMap;
 use async_trait::async_trait;
 use uuid::Uuid;
+use crate::agent;
 use crate::Registry;
 use crate::messages::*;
 use crate::query::query;
@@ -53,6 +54,7 @@ impl Tool for TaskTool {
             .collect();
 
         let agent_descriptions_text = agent_descriptions.join("\n");
+        log::info!("Sub Agents for TaskTool: {}", agent_descriptions_text);
 
         format!(
             r#"启动一个新代理以自主处理复杂的多步骤任务。
@@ -71,7 +73,7 @@ impl Tool for TaskTool {
 使用说明：
 1. 代完成任务后，会向您返回单条消息。代理返回的结果对用户不可见。如需向用户展示结果，您应向用户发送一条包含结果简要摘要的文本消息。
 2. 每代理调用都是无状态的。您无法向代理发送额外消息，代理也无法在其最终报告之外与您通信。因此，您的提示应包含高度详细的任务描述供代理自主执行，并明确指定代理应在其最终且唯一的消息中向您返回哪些信息。
-3. 通应信任代理的输出
+3. 通常应信任代理的输出
 4. 若理描述中提到应主动使用该代理，则应尽量在用户未主动要求的情况下率先使用。请自行判断。
         "#, agent_descriptions_text
         )
@@ -105,7 +107,7 @@ impl Tool for TaskTool {
 
         let agent_id = format!("{}-{}", agent_type, Uuid::new_v4().to_string());
         log::info!("{}: Create a new sub-agent {}", context.agent_id, agent_id);
-        let task_prompt = Registry::instance().get_agent_prompt();
+        let task_prompt = agent::get_agent_prompt();
         let mut tool_use_contenxt = ToolUseContext {
             model: None,
             tools: self.get_task_tools(agent_config.tools), 
@@ -121,6 +123,7 @@ impl Tool for TaskTool {
             HashMap::new(),
         ).await?;
 
+        log::info!("{}: Sub-agent {} finished", context.agent_id, agent_id);
         Ok(ToolMessage::new_content(assistant.content.clone(), context.tool_use_id.clone()))
     }
 }

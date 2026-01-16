@@ -79,12 +79,22 @@ pub enum Role {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ChatMessage {
+    #[serde(default, deserialize_with = "deserialize_null_as_empty_string")]
     pub content: String,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub reasoning_content: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub tool_calls: Option<Vec<ToolCall>>,
     pub role: String,
+}
+
+/// Deserializes a null value as an empty string.
+fn deserialize_null_as_empty_string<'de, D>(deserializer: D) -> Result<String, D::Error>
+where
+    D: serde::Deserializer<'de>,
+{
+    use serde::Deserialize;
+    Option::<String>::deserialize(deserializer).map(|opt| opt.unwrap_or_default())
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

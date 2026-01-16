@@ -15,6 +15,8 @@ Get your own agent running locally in minutes.
 ## 3. Everything is a plugin, designed for extension.
 ## 4. What you see is what you get, incredibly easy to use
 
+# Features
+- Deploy SmallThinker locally with support for RK3588 and RK3576.
 
 # Quick Start
 
@@ -91,7 +93,7 @@ This project is offered under a dual-license model.
 - For commercial licensing, please contact `yushi_app@163.com` for details.
 
 ## Examples
-- [LEGO Mindstorms EV3 AI Agent](docs/ev3.md)
+- [LEGO Mindstorms EV3 AI Agent](docs/zh-CN/ev3.md)
 
 ## Contact us
 - Email：`yushi_app@163.com`

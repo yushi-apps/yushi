@@ -1,5 +1,6 @@
 use serde::{Serialize, Deserialize};
 use async_trait::async_trait;
+use crate::Registry;
 use crate::error::{Result, JieyushaError};
 use crate::messages::{Message, ChatMessage, AssistantMessage, UnifiedRequest, ToolUse};
 
@@ -53,31 +54,31 @@ impl LlmProvider for ChatCompletionsProvider {
 
                 Message::Assistant(assistant_message) => {
                     let assistant_json = if let Some(tool_uses) = &assistant_message.tool_uses {
-                        let tool_calls: Vec<serde_json::Value> = tool_uses
-                            .iter()
-                            .map(|tool_use| {
-                                serde_json::json!({
+                        let mut tool_calls = Vec::new();
+
+                        for tool_use in tool_uses {
+                            if let Some(tool) = Registry::instance().get_tool(&tool_use.name) {
+                                let prompt = tool.prompt().await;
+                                tool_calls.push(serde_json::json!({
                                     "id": tool_use.id,
                                     "type": "function",
                                     "function": {
                                         "name": tool_use.name,
+                                        "description": prompt,
                                         "arguments": tool_use.arguments.clone(),
                                     }
-                                })
-                            })
-                            .collect();
+                                }));
+                            }
+                        }
 
                         serde_json::json!({
                             "role": "assistant",
-                            //"content": assistant_message.content,
                             "content": assistant_message.content,
-
                             "tool_calls": tool_calls
                         })
                     } else {
                         serde_json::json!({
                             "role": "assistant",
-                            //"content": assistant_message.content,
                             "content": assistant_message.content,
                         })
                     };
@@ -137,24 +138,32 @@ impl LlmProvider for ChatCompletionsProvider {
             "temperature": req.model.temperature,
             "top_p": 1,
             "tools": input_tools,
-            "logprobs": false,
-            "top_logprobs": null,
+            //"logprobs": false,
+            //"top_logprobs": null,
         });
 
-        let client = reqwest::Client::new();
-        let response = client
+        log::debug!("LLM Request Body: {:?}\n", request_body);
+        let request = reqwest::Client::new()
             .post(req.model.base_url)
-            .header("Authorization", format!("Bearer {}", req.model.api_key))
             .header("Content-Type", "application/json")
-            .json(&request_body)
-            .send()
-            .await?;
+            .header("Authorization", format!("Bearer {}", req.model.api_key))
+            .json(&request_body);
+
+
+        log::debug!("LLM Request: {:?}", request);
+        let response = request.send().await?;
 
         if !response.status().is_success() {
             return Err(JieyushaError::LlmError(format!("HTTP status: {}", response.status())));
         }
 
-        let llm_response: ChatCompletionResponse = response.json().await?;
+        //log::debug!("LLM Response Raw: {:?}", response);
+
+        let bytes = response.bytes().await?;
+        log::debug!("LLM Response Raw: {:?}", String::from_utf8_lossy(&bytes));
+
+        //let llm_response: ChatCompletionResponse = response.json().await?;
+        let llm_response: ChatCompletionResponse = serde_json::from_slice(&bytes)?;
         let chat_message = match llm_response
             .choices
             .into_iter()
@@ -250,20 +259,20 @@ impl ModelProfileBuilder {
             base_url: self.base_url.unwrap_or("https://api.deepseek.com/chat/completions".to_string()),
             api_key: self.api_key.expect("api_key is reqeuired"),
             max_tokens: self.max_tokens.unwrap_or(4096),
-            temperature: 1.0,
+            temperature: self.temperature.unwrap_or(1.0),
         }
     }
 }
 
 
-#[derive(Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Usage {
     pub completion_tokens: u32,
     pub prompt_tokens: u32,
     pub total_tokens: u32,
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize)]
 pub struct ChatCompletionResponse {
     pub id: String,
     pub choices: Vec<Choice>,
@@ -275,7 +284,7 @@ pub struct ChatCompletionResponse {
     pub usage: Usage,
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize)]
 pub struct Choice {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub finish_reason: Option<FinishReason>,
@@ -285,7 +294,7 @@ pub struct Choice {
     pub logprobs: Option<Logprobs>
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum FinishReason {
     Stop,
@@ -295,13 +304,13 @@ pub enum FinishReason {
     InsufficientSystemResources,
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize)]
 pub struct Logprobs {
     pub content: Option<Vec<TokenLogprob>>,
     pub reasoning_content: Option<Vec<TokenLogprob>>
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize)]
 pub struct TokenLogprob {
     pub token: String,
     pub logprob: f32,
@@ -309,7 +318,7 @@ pub struct TokenLogprob {
     pub top_logprobs: Vec<TopLogprobs>
 }
 
- #[derive(Serialize, Deserialize)]
+ #[derive(Debug, Serialize, Deserialize)]
 pub struct TopLogprobs {
     pub token: String,
     pub logprob: f32,

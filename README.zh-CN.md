@@ -15,13 +15,21 @@ Yushi（玉石）是一个无代码端侧智能体开发平台。
 ## 3. 一切皆工具，无限扩展
 ## 4. 所见即所得，极易上手
 
+# 功能
+- [本地部署smallthinker](docs/zh-CN/smallthinker.zh-CN.md)，支持RK3588和RK3576。
+以下命令会在`target/debian`生成rk3588和模型文件的deb包。
+```bash
+ yushi new rk3588 --localmodel smallthinker
+ yushi build --release --model --target aarch64-unknown-linux-musl
+```
+
 # 快速开始
 
 ## 源码安装
 
 **先决条件**
 - 安装了Git、Rust
-- 如未安装可以参考[先决条件](docs/prerequisites.zh-CN.md)进行安装
+- 如未安装可以参考[先决条件](docs/zh-CN/prerequisites.zh-CN.md)进行安装
 
 ### 1. 将Yushi下载到本地
 ```sh
@@ -54,9 +62,9 @@ cargo yushi new my_agent
 │   ├── agents/
 ```
 一个智能体就是一个普通的`Cargo`项目，带有`.yushi`配置文件。
-- `main_prompt.md`是[智能体的提示（Prompt）文件](docs/mainagent.zh-CN.md)，使用Markdown格式编写。
+- `main_prompt.md`是[智能体的提示（Prompt）文件](docs/zh-CN/mainagent.zh-CN.md)，使用Markdown格式编写。
 - `model.toml`是智能体的模型配置文件
-- `agents/`目录下存放的是[子代理](docs/subagent.zh-CN.md)，使用Markdowng格式编写，每个文件都是一个子智能体。
+- `agents/`目录下存放的是[子代理](docs/zh-CN/subagent.zh-CN.md)，使用Markdowng格式编写，每个文件都是一个子智能体。
 
 
 ### 5. 配置智能体
@@ -74,7 +82,7 @@ cargo yushi build --release
 ./my_agent/target/release/my_agent
 ```
 
-**交叉编译请参考[交叉编译文档](docs/cross.zh-CN.md)。**
+**交叉编译请参考[交叉编译文档](docs/zh-CN/cross.zh-CN.md)。**
 
 ### 7. 使用
 ```sh

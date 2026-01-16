@@ -21,12 +21,19 @@ enum Commands {
     #[command(name = "new", about = "Create a new agent")]
     New {
         name: String,
+        /// Add local model to the agent
+        #[arg(long)]
+        localmodel: Option<String>,
     },
     #[command(name = "build", about = "Build the agent")]
     Build {
         /// Pass additional arguments to cargo build
         #[arg(allow_hyphen_values = true)]
         args: Vec<String>,
+        
+        /// Create Debian package for the model
+        #[arg(long)]
+        model: bool,
     },
     #[command(name = "tool", about = "Manage tools in the agent", subcommand)]
     Tool(ToolCommands),
@@ -74,50 +81,76 @@ fn main() {
     let cli = Cli::parse_from(adjusted_args);
 
     match &cli.cmd {
-        Some(Commands::New { name }) => {
-            let output = Command::new("cargo")
-                .args(["new", name])
-                .output()
-                .expect("Failed to execute cargo new command");
-            
-            if !output.status.success() {
-                eprintln!("Failed to create project: {}", String::from_utf8_lossy(&output.stderr));
-                std::process::exit(1);
-            }
-            
-            let mut project_path = PathBuf::from(".");
-            project_path.push(name);
-            
-            let cargo_toml_path = project_path.join("Cargo.toml");
-            let mut cargo_toml = std::fs::read_to_string(&cargo_toml_path)
-                .expect("Failed to read Cargo.toml");
-            
-            let deps_pos = cargo_toml.find("[dependencies]").unwrap_or(cargo_toml.len());
-            let metadata = "description = \"Yushi AI Agent\"\nlicense = \"AGPL-3.0\"\nauthors = [\"Yushi yushi_app@163.com\"]\n";
-            if deps_pos < cargo_toml.len() {
-                cargo_toml.insert_str(deps_pos - 1, metadata);
-            } else {
-                cargo_toml.push_str(metadata);
-            }
-            
-            let deps_section = "\n[dependencies]\n";
-            if !cargo_toml.contains("[dependencies]") {
-                cargo_toml.push_str(deps_section);
-            }
-            
-            cargo_toml.push_str("rust-embed = \"8.9.0\"\n");
-            cargo_toml.push_str("app.workspace = true\n");
-            cargo_toml.push_str("jieyusha.workspace = true\n");
-            cargo_toml.push_str("\n[package.metadata.deb]\n");
-            cargo_toml.push_str("assets = [\n");
-            cargo_toml.push_str("    [\"target/release/rk3588\", \"usr/bin/\", \"755\"],\n");
-            cargo_toml.push_str("]\n");
+        Some(Commands::New { name, localmodel }) => handle_new_command(name, localmodel),
+        Some(Commands::Build { args, model }) => handle_build_command(args, model),
+        Some(Commands::Tool(tool_cmd)) => handle_tool_command(tool_cmd),
+        Some(Commands::Delete { name }) => handle_delete_command(name),
+        None => {}
+    }
+}
 
-            std::fs::write(&cargo_toml_path, cargo_toml)
-                .expect("Failed to write to Cargo.toml");
-            
-            let main_rs_path = project_path.join("src").join("main.rs");
-            std::fs::write(&main_rs_path, r#"
+fn handle_new_command(name: &String, localmodel: &Option<String>) {
+    let output = Command::new("cargo")
+        .args(["new", name])
+        .output()
+        .expect("Failed to execute cargo new command");
+    
+    if !output.status.success() {
+        eprintln!("Failed to create project: {}", String::from_utf8_lossy(&output.stderr));
+        std::process::exit(1);
+    }
+    
+    let mut project_path = PathBuf::from(".");
+    project_path.push(name);
+    
+    let cargo_toml_path = project_path.join("Cargo.toml");
+    let mut cargo_toml = std::fs::read_to_string(&cargo_toml_path)
+        .expect("Failed to read Cargo.toml");
+    
+    let deps_pos = cargo_toml.find("[dependencies]").unwrap_or(cargo_toml.len());
+    let metadata = "description = \"Yushi AI Agent\"\nlicense = \"AGPL-3.0\"\nauthors = [\"Yushi yushi_app@163.com\"]\n";
+    if deps_pos < cargo_toml.len() {
+        cargo_toml.insert_str(deps_pos - 1, metadata);
+    } else {
+        cargo_toml.push_str(metadata);
+    }
+    
+    let deps_section = "\n[dependencies]\n";
+    if !cargo_toml.contains("[dependencies]") {
+        cargo_toml.push_str(deps_section);
+    }
+    
+    cargo_toml.push_str("rust-embed = \"8.9.0\"\n");
+    if let Some(model_name) = localmodel {
+        cargo_toml.push_str(&format!("app = {{workspace = true, features = [\"model-{}\"]}}\n", model_name));
+    } else {
+        cargo_toml.push_str("app.workspace = true\n");
+    }
+    cargo_toml.push_str("jieyusha.workspace = true\n");
+    cargo_toml.push_str("\n[package.metadata.deb]\n");
+    cargo_toml.push_str("assets = [\n");
+    cargo_toml.push_str(&format!("    [\"target/release/{}\", \"usr/bin/\", \"755\"],\n", name));
+    
+    // Add local model assets if specified
+    if let Some(model_name) = localmodel {
+        cargo_toml.push_str(&format!("    [\"assets/model/{}\", \"usr/bin/\", \"755\"],\n", model_name));
+        
+        // Add depends = "libaio1" if the model is smallthinker
+        if model_name == "smallthinker" {
+            cargo_toml.push_str("]\n");
+            cargo_toml.push_str("depends = \"libaio1\"\n");
+        } else {
+            cargo_toml.push_str("]\n");
+        }
+    } else {
+        cargo_toml.push_str("]\n");
+    }
+
+    std::fs::write(&cargo_toml_path, cargo_toml)
+        .expect("Failed to write to Cargo.toml");
+    
+    let main_rs_path = project_path.join("src").join("main.rs");
+    std::fs::write(&main_rs_path, r#"
 use rust_embed::RustEmbed;
 use app::App;
 
@@ -151,17 +184,17 @@ fn main() {
 }
 "#).expect("Failed to write to main.rs");
 
-            let yushi_dir = project_path.join(".yushi");
-            std::fs::create_dir_all(&yushi_dir).expect("Failed to create .yushi directory");
+    let yushi_dir = project_path.join(".yushi");
+    std::fs::create_dir_all(&yushi_dir).expect("Failed to create .yushi directory");
 
-            let agents_dir = yushi_dir.join("agents");
-            std::fs::create_dir_all(&agents_dir).expect("Failed to create agents directory");
+    let agents_dir = yushi_dir.join("agents");
+    std::fs::create_dir_all(&agents_dir).expect("Failed to create agents directory");
 
-            let app_agent_path = yushi_dir.join("main_prompt.md");
-            std::fs::write(&app_agent_path, "").expect("Failed to create .yushi/main_prompt.md");
+    let app_agent_path = yushi_dir.join("main_prompt.md");
+    std::fs::write(&app_agent_path, "").expect("Failed to create .yushi/main_prompt.md");
 
-            let model_path = yushi_dir.join("model.toml");
-            std::fs::write(&model_path, r#"
+    let model_path = yushi_dir.join("model.toml");
+    std::fs::write(&model_path, r#"
 # Model Configuration
 
 [model]
@@ -182,208 +215,272 @@ temperature = 0.2 # Control output randomness: lower values (such as 0.2) are mo
 top_p = 0.9       # Nucleus Sampling: Control diversity: 0.5 means only the top 50% of the most probable tokens are considered. 
             "#).expect("Failed to create .yushi/model.toml");
 
-            println!("Successfully created agent at {}", project_path.display());
+    println!("Successfully created agent at {}", project_path.display());
+}
+
+fn handle_build_command(args: &Vec<String>, model: &bool) {
+    let mut cargo_args = vec!["build".to_string()];
+    let mut use_cross = false;
+    let mut is_release = false;
+    let mut target_arg = None;
+    
+    // Check if --target or --release is in the arguments
+    let mut iter = args.iter();
+    while let Some(arg) = iter.next() {
+        if arg == "--target" {
+            use_cross = true;
+            cargo_args.push(arg.clone());
+            // Also add the target value
+            if let Some(target) = iter.next() {
+                cargo_args.push(target.clone());
+                target_arg = Some(target.clone());
+            }
+        } else if arg.starts_with("--target=") {
+            use_cross = true;
+            cargo_args.push(arg.clone());
+            target_arg = Some(arg[9..].to_string());
+        } else if arg == "--release" {
+            is_release = true;
+            cargo_args.push(arg.clone());
+        } else {
+            cargo_args.push(arg.clone());
+        }
+    }
+    
+    let mut command = Command::new(if use_cross { "cross" } else { "cargo" });
+    for arg in &cargo_args {
+        command.arg(arg);
+    }
+
+    println!("Build command: {:?}", command);
+
+    let status = command
+        .status()
+        .expect("Failed to execute build command");
+        
+    if !status.success() {
+        eprintln!("Build failed with exit code: {:?}", status.code());
+        std::process::exit(status.code().unwrap_or(1));
+    }
+    
+    println!("Successfully built agent");
+    
+
+    if *model {
+        println!("Creating Debian package for model...");
+        
+        let mut deb_command = Command::new("cargo");
+        deb_command.arg("deb").arg("-p").arg("yushi-model");
+        
+        if let Some(target) = target_arg {
+            deb_command.arg("--target").arg(target);
+        }
+
+        let status = deb_command
+            .status()
+            .expect("Failed to execute deb command for model");
+            
+        if !status.success() {
+            eprintln!("Deb packaging for model failed with exit code: {:?}", status.code());
+            std::process::exit(status.code().unwrap_or(1));
         }
         
-        Some(Commands::Build { args }) => {
-            
-            let mut cargo_args = vec!["build".to_string()];
-            let mut use_cross = false;
-            let mut is_release = false;
-            
-            // Check if --target or --release is in the arguments
+        println!("Successfully created Debian package for model");
+    } else {
+        if is_release {
+            println!("Creating Debian package...");
+
             let mut iter = args.iter();
+            let mut package_arg = None;
             while let Some(arg) = iter.next() {
-                if arg == "--target" {
-                    use_cross = true;
-                    cargo_args.push(arg.clone());
-                    // Also add the target value
-                    if let Some(target) = iter.next() {
-                        cargo_args.push(target.clone());
+                if arg == "-p" {
+                    if let Some(package) = iter.next() {
+                        package_arg = Some(package.clone());
                     }
-                } else if arg.starts_with("--target=") {
-                    use_cross = true;
-                    cargo_args.push(arg.clone());
-                } else if arg == "--release" {
-                    is_release = true;
-                    cargo_args.push(arg.clone());
-                } else {
-                    cargo_args.push(arg.clone());
-                }
-            }
-            
-            let mut command = Command::new(if use_cross { "cross" } else { "cargo" });
-            for arg in &cargo_args {
-                command.arg(arg);
+                    break;
+                } else if arg.starts_with("--package") {
+                    if let Some(package) = iter.next() {
+                        package_arg = Some(package.clone());
+                    }
+                    break;
+                } 
             }
 
-            let status = command
+            let mut deb_command = Command::new("cargo");
+            deb_command.arg("deb").arg("--no-build");
+
+            let current_dir = std::env::current_dir().expect("Failed to get current directory");
+            let mut cargo_toml_path = None;
+            let mut binary_source_path = current_dir.join("../assets").join("binaries");
+            let mut binary_dest_path = current_dir.join("assets").join("model");
+            if let Some(package) = package_arg {
+                deb_command.arg("-p").arg(&package);
+                if current_dir.ends_with(&package) {
+                    cargo_toml_path = Some(current_dir.join("Cargo.toml"));
+                } else {
+                    cargo_toml_path = Some(current_dir.join(&package).join("Cargo.toml"));
+                    binary_source_path = current_dir.join("assets").join("binaries");
+                    binary_dest_path = current_dir.join(&package).join("assets").join("model");
+                }
+            }
+
+            if let Some(target) = target_arg {
+                deb_command.arg("--target").arg(&target);
+                if target.starts_with("aarch64-unknown-linux") {
+                    binary_source_path = binary_source_path.join("aarch64-unknown-linux");
+                }
+            }
+
+            if let Some(model_name) = get_model_name_from_cargo_toml(&cargo_toml_path) {
+                std::fs::create_dir_all(&binary_dest_path)
+                    .expect("Failed to create model directory for deb package");
+                std::fs::copy(binary_source_path.join(&model_name), binary_dest_path.join(&model_name))
+                    .expect("Failed to copy model binary for deb package");
+            }
+
+            let status = deb_command
                 .status()
-                .expect("Failed to execute build command");
+                .expect("Failed to execute deb command");
                 
             if !status.success() {
-                eprintln!("Build failed with exit code: {:?}", status.code());
+                eprintln!("Deb packaging failed with exit code: {:?}", status.code());
                 std::process::exit(status.code().unwrap_or(1));
             }
             
-            println!("Successfully built agent");
-            
-            if is_release {
-                println!("Creating Debian package...");
-                
-                let mut target_arg = None;
-                let mut iter = args.iter();
-                while let Some(arg) = iter.next() {
-                    if arg == "--target" {
-                        if let Some(target) = iter.next() {
-                            target_arg = Some(target.clone());
-                        }
-                        break;
-                    } else if arg.starts_with("--target=") {
-                        target_arg = Some(arg[9..].to_string()); // Skip "--target=" prefix
-                        break;
-                    }
-                }
-                
-                let mut deb_command = Command::new("cargo");
-                deb_command.arg("deb").arg("--no-build");
-                
-                if let Some(target) = target_arg {
-                    deb_command.arg("--target").arg(target);
-                }
-
-                let status = deb_command
-                    .status()
-                    .expect("Failed to execute deb command");
-                    
-                if !status.success() {
-                    eprintln!("Deb packaging failed with exit code: {:?}", status.code());
-                    std::process::exit(status.code().unwrap_or(1));
-                }
-                
-                println!("Successfully created Debian package");
-            }
+            println!("Successfully created Debian package");
+        } else {
+            println!("Skipping Debian package creation because not in release mode.");
         }
+    }
+}
 
-        Some(Commands::Tool(tool_cmd)) => match tool_cmd {
-            ToolCommands::Add { name } => {
-                if !is_upper_camel_case(name) {
-                    eprintln!("Error: Tool name must be in UpperCamelCase");
-                    std::process::exit(1);
-                } 
+fn handle_tool_command(tool_cmd: &ToolCommands) {
+    match tool_cmd {
+        ToolCommands::Add { name } => handle_tool_add(name),
+        ToolCommands::New { name } => handle_tool_new(name),
+        ToolCommands::Delete { name } => handle_tool_delete(name),
+        ToolCommands::Remove { name } => handle_tool_remove(name),
+    }
+}
 
-                let project_root = std::env::current_dir().expect("Failed to get current directory");
-                if !project_root.exists() {
-                    eprintln!("Error: current directory does not exist");
-                    std::process::exit(1);
-                }
-                
-                let cargo_toml_path = project_root.join("Cargo.toml");
-                let main_rs_path = project_root.join("src").join("main.rs");
-                let yushi_assets_dir = project_root.join(".yushi");
-                if !yushi_assets_dir.exists() {
-                    eprintln!("Error: This command can only be run from within a agent directory");
-                    std::process::exit(1);
-                }
-                
-                let mut cargo_toml = std::fs::read_to_string(&cargo_toml_path)
-                    .expect("Failed to read Cargo.toml");
-                
-                let tool_path = to_snake_case(name);
-                let tool_dep_line = format!("{} = {{ path = \"../tools/{}\" }}\n", tool_path, tool_path);
-                if !cargo_toml.contains(&tool_dep_line) {
-                    // Find the end of the [dependencies] section
-                    if let Some(pos) = cargo_toml.find("\n[dependencies]\n") {
-                        let insert_pos = pos + "\n[dependencies]\n".len();
-                        cargo_toml.insert_str(insert_pos, &tool_dep_line);
-                    } else if let Some(pos) = cargo_toml.find("[dependencies]\n") {
-                        let insert_pos = pos + "[dependencies]\n".len();
-                        cargo_toml.insert_str(insert_pos, &tool_dep_line);
-                    } else {
-                        // If no [dependencies] section exists, create one
-                        cargo_toml.push_str("\n[dependencies]\n");
-                        cargo_toml.push_str(&tool_dep_line);
-                    }
-                    
-                    std::fs::write(&cargo_toml_path, cargo_toml)
-                        .expect("Failed to write to Cargo.toml");
-                }
-                
-                // Read and update main.rs
-                let main_rs_content = std::fs::read_to_string(&main_rs_path)
-                    .expect("Failed to read main.rs");
-                
-                let import_line = format!("use {}::{};\n", tool_path, name);
-                let register_line = format!("    app.add_tools({});\n", name);
-                let mut updated_main_rs = main_rs_content.clone();
-                
-                // Add import if not already present
-                if !updated_main_rs.contains(&import_line) {
-                    // Insert after the existing use statement
-                    if let Some(pos) = updated_main_rs.find("use app::App;") {
-                        let insert_pos = pos + "use app::App;".len();
-                        updated_main_rs.insert_str(insert_pos, &format!("\n{}", import_line.trim_end()));
-                    }
-                }
-                
-                // Add tool registration if not already present
-                if !updated_main_rs.contains(&register_line.trim()) {
-                    // Insert before the app.run() line
-                    if let Some(pos) = updated_main_rs.find("    app.run()") {
-                        updated_main_rs.insert_str(pos, &register_line);
-                    }
-                }
-                
-                std::fs::write(&main_rs_path, updated_main_rs)
-                    .expect("Failed to write to main.rs");
-                
-                println!("Added {} to agent", name);
-            }
-            
-            ToolCommands::New { name } => {
-                if !is_upper_camel_case(name) {
-                    eprintln!("Error: Tool name must follow UpperCamelCase convention (e.g., MyToolName)");
-                    std::process::exit(1);
-                }
-                
-                let yushi_root = std::env::current_dir().expect("Failed to get current directory");
-                let tools_dir = yushi_root.join("tools");
-                
-                if !tools_dir.exists() {
-                    eprintln!("Error: This command can only be run from within a yushi project directory");
-                    std::process::exit(1);
-                }
+fn handle_tool_add(name: &String) {
+    if !is_upper_camel_case(name) {
+        eprintln!("Error: Tool name must be in UpperCamelCase");
+        std::process::exit(1);
+    } 
 
-                let snake_name = to_snake_case(name);
-                let tool_dir = tools_dir.join(&snake_name);
-                
-                let output = Command::new("cargo")
-                    .args(["new", "--lib", &snake_name])
-                    .current_dir(&tools_dir)
-                    .output()
-                    .expect("Failed to execute cargo new command");
-                
-                if !output.status.success() {
-                    eprintln!("Failed to create tool project: {}", String::from_utf8_lossy(&output.stderr));
-                    std::process::exit(1);
-                }
-                
-                // Update the tool's Cargo.toml to include jieyusha dependency
-                let cargo_toml_path = tool_dir.join("Cargo.toml");
-                let mut cargo_toml = std::fs::read_to_string(&cargo_toml_path)
-                    .expect("Failed to read tool's Cargo.toml");
-                
-                cargo_toml.push_str("jieyusha.workspace = true\n");
-                cargo_toml.push_str("async-trait.workspace = true\n");
-                cargo_toml.push_str("serde.workspace = true\n");
-                cargo_toml.push_str("serde_json.workspace = true\n");
-                    
-                std::fs::write(&cargo_toml_path, cargo_toml)
-                        .expect("Failed to write to tool's Cargo.toml");
-                
-                // Create lib.rs with jieyusha prelude import
-                let lib_rs_path = tool_dir.join("src").join("lib.rs");
-                std::fs::write(&lib_rs_path, format!(r##"
+    let project_root = std::env::current_dir().expect("Failed to get current directory");
+    if !project_root.exists() {
+        eprintln!("Error: current directory does not exist");
+        std::process::exit(1);
+    }
+    
+    let cargo_toml_path = project_root.join("Cargo.toml");
+    let main_rs_path = project_root.join("src").join("main.rs");
+    let yushi_assets_dir = project_root.join(".yushi");
+    if !yushi_assets_dir.exists() {
+        eprintln!("Error: This command can only be run from within a agent directory");
+        std::process::exit(1);
+    }
+    
+    let mut cargo_toml = std::fs::read_to_string(&cargo_toml_path)
+        .expect("Failed to read Cargo.toml");
+    
+    let tool_path = to_snake_case(name);
+    let tool_dep_line = format!("{} = {{ path = \"../tools/{}\" }}\n", tool_path, tool_path);
+    if !cargo_toml.contains(&tool_dep_line) {
+        // Find the end of the [dependencies] section
+        if let Some(pos) = cargo_toml.find("\n[dependencies]\n") {
+            let insert_pos = pos + "\n[dependencies]\n".len();
+            cargo_toml.insert_str(insert_pos, &tool_dep_line);
+        } else if let Some(pos) = cargo_toml.find("[dependencies]\n") {
+            let insert_pos = pos + "[dependencies]\n".len();
+            cargo_toml.insert_str(insert_pos, &tool_dep_line);
+        } else {
+            // If no [dependencies] section exists, create one
+            cargo_toml.push_str("\n[dependencies]\n");
+            cargo_toml.push_str(&tool_dep_line);
+        }
+        
+        std::fs::write(&cargo_toml_path, cargo_toml)
+            .expect("Failed to write to Cargo.toml");
+    }
+    
+    // Read and update main.rs
+    let main_rs_content = std::fs::read_to_string(&main_rs_path)
+        .expect("Failed to read main.rs");
+    
+    let import_line = format!("use {}::{};\n", tool_path, name);
+    let register_line = format!("    app.add_tools({});\n", name);
+    let mut updated_main_rs = main_rs_content.clone();
+    
+    // Add import if not already present
+    if !updated_main_rs.contains(&import_line) {
+        // Insert after the existing use statement
+        if let Some(pos) = updated_main_rs.find("use app::App;") {
+            let insert_pos = pos + "use app::App;".len();
+            updated_main_rs.insert_str(insert_pos, &format!("\n{}", import_line.trim_end()));
+        }
+    }
+    
+    // Add tool registration if not already present
+    if !updated_main_rs.contains(&register_line.trim()) {
+        // Insert before the app.run() line
+        if let Some(pos) = updated_main_rs.find("    app.run()") {
+            updated_main_rs.insert_str(pos, &register_line);
+        }
+    }
+    
+    std::fs::write(&main_rs_path, updated_main_rs)
+        .expect("Failed to write to main.rs");
+    
+    println!("Added {} to agent", name);
+}
+
+fn handle_tool_new(name: &String) {
+    if !is_upper_camel_case(name) {
+        eprintln!("Error: Tool name must follow UpperCamelCase convention (e.g., MyToolName)");
+        std::process::exit(1);
+    }
+    
+    let yushi_root = std::env::current_dir().expect("Failed to get current directory");
+    let tools_dir = yushi_root.join("tools");
+    
+    if !tools_dir.exists() {
+        eprintln!("Error: This command can only be run from within a yushi project directory");
+        std::process::exit(1);
+    }
+
+    let snake_name = to_snake_case(name);
+    let tool_dir = tools_dir.join(&snake_name);
+    
+    let output = Command::new("cargo")
+        .args(["new", "--lib", &snake_name])
+        .current_dir(&tools_dir)
+        .output()
+        .expect("Failed to execute cargo new command");
+    
+    if !output.status.success() {
+        eprintln!("Failed to create tool project: {}", String::from_utf8_lossy(&output.stderr));
+        std::process::exit(1);
+    }
+    
+    // Update the tool's Cargo.toml to include jieyusha dependency
+    let cargo_toml_path = tool_dir.join("Cargo.toml");
+    let mut cargo_toml = std::fs::read_to_string(&cargo_toml_path)
+        .expect("Failed to read tool's Cargo.toml");
+    
+    cargo_toml.push_str("jieyusha.workspace = true\n");
+    cargo_toml.push_str("async-trait.workspace = true\n");
+    cargo_toml.push_str("serde.workspace = true\n");
+    cargo_toml.push_str("serde_json.workspace = true\n");
+        
+    std::fs::write(&cargo_toml_path, cargo_toml)
+            .expect("Failed to write to tool's Cargo.toml");
+    
+    // Create lib.rs with jieyusha prelude import
+    let lib_rs_path = tool_dir.join("src").join("lib.rs");
+    std::fs::write(&lib_rs_path, format!(r##"
 use async_trait::async_trait;
 use jieyusha::*;
 
@@ -414,231 +511,226 @@ impl Tool for {} {{
     }}
 }}
 "##, name, name, name))
-                .expect("Failed to write to tool's lib.rs");
-                
-                println!("Successfully created tool: tools/{}", snake_name);
-            }
-            
-            ToolCommands::Delete { name } => {
-                if !is_upper_camel_case(name) {
-                    eprintln!("Error: Tool name must follow UpperCamelCase convention (e.g., MyToolName)");
-                    std::process::exit(1);
-                }
-                
-                let yushi_root = std::env::current_dir().expect("Failed to get current directory");
-                let tools_dir = yushi_root.join("tools");
-                
-                if !tools_dir.exists() {
-                    eprintln!("Error: This command can only be run from within a yushi project directory");
-                    std::process::exit(1);
-                }
-                
-                let snake_name = to_snake_case(name);
-                let tool_dir = tools_dir.join(&snake_name);
-                
-                if !tool_dir.exists() {
-                    eprintln!("Error: Tool '{}' does not exist", name);
-                    std::process::exit(1);
-                }
-                
-                if let Err(e) = std::fs::remove_dir_all(&tool_dir) {
-                    eprintln!("Error: Failed to remove tool directory '{}': {}", snake_name, e);
-                    std::process::exit(1);
-                }
-                
-                // Update the workspace Cargo.toml to remove from members
-                let workspace_cargo_toml = yushi_root.join("Cargo.toml");
-                if workspace_cargo_toml.exists() {
-                    let cargo_toml_content = std::fs::read_to_string(&workspace_cargo_toml)
-                        .expect("Failed to read workspace Cargo.toml");
-                    
-                    let mut lines: Vec<String> = cargo_toml_content.lines().map(|s| s.to_string()).collect();
-                    let mut in_members_section = false;
-                    let mut i = 0;
-                    
-                    while i < lines.len() {
-                        let line = &lines[i];
-                        
-                        if line.trim_start().starts_with("[workspace]") {
-                            in_members_section = true;
-                        } else if in_members_section && line.contains("members") && line.contains("=") {
-                            // Handle members array
-                            if line.contains("[") && line.contains("]") {
-                                // Single line members array
-                                let member_entry = format!("\"tools/{}\"", snake_name);
-                                if line.contains(&member_entry) {
-                                    let new_line = line.replace(&format!("{}, ", &member_entry), "")
-                                        .replace(&format!(", {}", &member_entry), "")
-                                        .replace(&member_entry, "");
-                                    lines[i] = new_line;
-                                }
-                            } else if line.contains("[") {
-                                // Multi-line members array starting
-                                let mut j = i + 1;
-                                while j < lines.len() && !lines[j].contains("]") {
-                                    let member_entry = format!("\"tools/{}\"", snake_name);
-                                    if lines[j].contains(&member_entry) {
-                                        lines.remove(j);
-                                        // Don't increment j since we removed a line
-                                    } else {
-                                        j += 1;
-                                    }
-                                }
-                            }
-                        } else if line.trim_start().starts_with("[") && !line.trim_start().starts_with("[workspace]") {
-                            // We've moved to another section
-                            in_members_section = false;
-                        }
-                        
-                        i += 1;
-                    }
-                    
-                    let updated_content = lines.join("\n");
-                    std::fs::write(&workspace_cargo_toml, updated_content)
-                        .expect("Failed to write to workspace Cargo.toml");
-                }
-                
-                println!("Successfully deleted tool: {}", name);
-            }
-            
-            ToolCommands::Remove { name } => {
-                if !is_upper_camel_case(name) {
-                    eprintln!("Error: Tool name must be in UpperCamelCase");
-                    std::process::exit(1);
-                } 
+    .expect("Failed to write to tool's lib.rs");
+    
+    println!("Successfully created tool: tools/{}", snake_name);
+}
 
-                let project_root = std::env::current_dir().expect("Failed to get current directory");
-                let cargo_toml_path = project_root.join("Cargo.toml");
-                let main_rs_path = project_root.join("src").join("main.rs");
-                let yushi_assets_dir = project_root.join(".yushi");
-                if !yushi_assets_dir.exists() {
-                    eprintln!("Error: This command can only be run from within a agent directory");
-                    std::process::exit(1);
-                }
-                
-                // Read and update Cargo.toml to remove the dependency
-                let mut cargo_toml = std::fs::read_to_string(&cargo_toml_path)
-                    .expect("Failed to read Cargo.toml");
-                
-                let tool_path = to_snake_case(name);
-                let tool_dep_line = format!("{} = {{ path = \"../tools/{}\" }}\n", tool_path, tool_path);
-                
-                if cargo_toml.contains(&tool_dep_line) {
-                    cargo_toml = cargo_toml.replace(&tool_dep_line, "");
-                    std::fs::write(&cargo_toml_path, cargo_toml)
-                        .expect("Failed to write to Cargo.toml");
-                }
-                
-                // Read and update main.rs to remove import and registration
-                let main_rs_content = std::fs::read_to_string(&main_rs_path)
-                    .expect("Failed to read main.rs");
-                
-                let import_line = format!("use {}::{};\n", tool_path, name);
-                let register_line = format!("    app.add_tools({});\n", name);
-                let mut updated_main_rs = main_rs_content.clone();
-                
-                // Remove import if present
-                if updated_main_rs.contains(&import_line) {
-                    updated_main_rs = updated_main_rs.replace(&import_line, "");
-                }
-                
-                // Remove tool registration if present
-                if updated_main_rs.contains(&register_line.trim()) {
-                    updated_main_rs = updated_main_rs.replace(&register_line, "");
-                }
-                
-                std::fs::write(&main_rs_path, updated_main_rs)
-                    .expect("Failed to write to main.rs");
-                
-                println!("Removed {} from agent", name);
-            }
-        }
-
-        Some(Commands::Delete { name }) => {
-            // Check if we are in a yushi project directory by looking for a workspace Cargo.toml
-            let workspace_cargo_toml = PathBuf::from("Cargo.toml");
-            if !workspace_cargo_toml.exists() {
-                eprintln!("Error: No Cargo.toml found in current directory. Please run this command from the root of a yushi project.");
-                std::process::exit(1);
-            }
-
-            // Verify this is a workspace Cargo.toml by checking for [workspace] section
-            let cargo_toml_content = std::fs::read_to_string(&workspace_cargo_toml)
-                .expect("Failed to read Cargo.toml");
-            
-            if !cargo_toml_content.contains("[workspace]") {
-                eprintln!("Error: This doesn't appear to be a yushi workspace. Missing [workspace] section in Cargo.toml.");
-                std::process::exit(1);
-            }
-
-            let project_path = PathBuf::from(name);
-            
-            if !project_path.exists() {
-                eprintln!("Error: Project directory '{}' does not exist", name);
-                std::process::exit(1);
-            }
-            
-            if let Err(e) = std::fs::remove_dir_all(&project_path) {
-                eprintln!("Error: Failed to remove project directory '{}': {}", name, e);
-                std::process::exit(1);
-            }
-            
-            // Update workspace Cargo.toml to remove from members
-            if workspace_cargo_toml.exists() {
-                let cargo_toml_content = std::fs::read_to_string(&workspace_cargo_toml)
-                    .expect("Failed to read workspace Cargo.toml");
-                
-                let mut lines: Vec<String> = cargo_toml_content.lines().map(|s| s.to_string()).collect();
-                let mut in_members_section = false;
-                let mut i = 0;
-                
-                while i < lines.len() {
-                    let line = &lines[i];
-                    
-                    if line.trim_start().starts_with("[workspace]") {
-                        in_members_section = true;
-                    } else if in_members_section && line.contains("members") && line.contains("=") {
-                        // Handle members array
-                        if line.contains("[") && line.contains("]") {
-                            // Single line members array
-                            let member_entry = format!("\"{}\"", name);
-                            if line.contains(&member_entry) {
-                                let new_line = line.replace(&format!("{}, ", &member_entry), "")
-                                    .replace(&format!(", {}", &member_entry), "")
-                                    .replace(&member_entry, "");
-                                lines[i] = new_line;
-                            }
-                        } else if line.contains("[") {
-                            // Multi-line members array starting
-                            let mut j = i + 1;
-                            while j < lines.len() && !lines[j].contains("]") {
-                                let member_entry = format!("\"{}\"", name);
-                                if lines[j].contains(&member_entry) {
-                                    lines.remove(j);
-                                    // Don't increment j since we removed a line
-                                } else {
-                                    j += 1;
-                                }
-                            }
-                        }
-                    } else if line.trim_start().starts_with("[") && !line.trim_start().starts_with("[workspace]") {
-                        // We've moved to another section
-                        in_members_section = false;
-                    }
-                    
-                    i += 1;
-                }
-                
-                let updated_content = lines.join("\n");
-                std::fs::write(&workspace_cargo_toml, updated_content)
-                    .expect("Failed to write to workspace Cargo.toml");
-            }
-            
-            println!("Successfully deleted agent '{}'", name);
-        }
-
-        None => {}
+fn handle_tool_delete(name: &String) {
+    if !is_upper_camel_case(name) {
+        eprintln!("Error: Tool name must follow UpperCamelCase convention (e.g., MyToolName)");
+        std::process::exit(1);
     }
+    
+    let yushi_root = std::env::current_dir().expect("Failed to get current directory");
+    let tools_dir = yushi_root.join("tools");
+    
+    if !tools_dir.exists() {
+        eprintln!("Error: This command can only be run from within a yushi project directory");
+        std::process::exit(1);
+    }
+    
+    let snake_name = to_snake_case(name);
+    let tool_dir = tools_dir.join(&snake_name);
+    
+    if !tool_dir.exists() {
+        eprintln!("Error: Tool '{}' does not exist", name);
+        std::process::exit(1);
+    }
+    
+    if let Err(e) = std::fs::remove_dir_all(&tool_dir) {
+        eprintln!("Error: Failed to remove tool directory '{}': {}", snake_name, e);
+        std::process::exit(1);
+    }
+    
+    // Update the workspace Cargo.toml to remove from members
+    let workspace_cargo_toml = yushi_root.join("Cargo.toml");
+    if workspace_cargo_toml.exists() {
+        let cargo_toml_content = std::fs::read_to_string(&workspace_cargo_toml)
+            .expect("Failed to read workspace Cargo.toml");
+        
+        let mut lines: Vec<String> = cargo_toml_content.lines().map(|s| s.to_string()).collect();
+        let mut in_members_section = false;
+        let mut i = 0;
+        
+        while i < lines.len() {
+            let line = &lines[i];
+            
+            if line.trim_start().starts_with("[workspace]") {
+                in_members_section = true;
+            } else if in_members_section && line.contains("members") && line.contains("=") {
+                // Handle members array
+                if line.contains("[") && line.contains("]") {
+                    // Single line members array
+                    let member_entry = format!("\"tools/{}\"", snake_name);
+                    if line.contains(&member_entry) {
+                        let new_line = line.replace(&format!("{}, ", &member_entry), "")
+                            .replace(&format!(", {}", &member_entry), "")
+                            .replace(&member_entry, "");
+                        lines[i] = new_line;
+                    }
+                } else if line.contains("[") {
+                    // Multi-line members array starting
+                    let mut j = i + 1;
+                    while j < lines.len() && !lines[j].contains("]") {
+                        let member_entry = format!("\"tools/{}\"", snake_name);
+                        if lines[j].contains(&member_entry) {
+                            lines.remove(j);
+                            // Don't increment j since we removed a line
+                        } else {
+                            j += 1;
+                        }
+                    }
+                }
+            } else if line.trim_start().starts_with("[") && !line.trim_start().starts_with("[workspace]") {
+                // We've moved to another section
+                in_members_section = false;
+            }
+            
+            i += 1;
+        }
+        
+        let updated_content = lines.join("\n");
+        std::fs::write(&workspace_cargo_toml, updated_content)
+            .expect("Failed to write to workspace Cargo.toml");
+    }
+    
+    println!("Successfully deleted tool: {}", name);
+}
+
+fn handle_tool_remove(name: &String) {
+    if !is_upper_camel_case(name) {
+        eprintln!("Error: Tool name must be in UpperCamelCase");
+        std::process::exit(1);
+    } 
+
+    let project_root = std::env::current_dir().expect("Failed to get current directory");
+    let cargo_toml_path = project_root.join("Cargo.toml");
+    let main_rs_path = project_root.join("src").join("main.rs");
+    let yushi_assets_dir = project_root.join(".yushi");
+    if !yushi_assets_dir.exists() {
+        eprintln!("Error: This command can only be run from within a agent directory");
+        std::process::exit(1);
+    }
+    
+    // Read and update Cargo.toml to remove the dependency
+    let mut cargo_toml = std::fs::read_to_string(&cargo_toml_path)
+        .expect("Failed to read Cargo.toml");
+    
+    let tool_path = to_snake_case(name);
+    let tool_dep_line = format!("{} = {{ path = \"../tools/{}\" }}\n", tool_path, tool_path);
+    
+    if cargo_toml.contains(&tool_dep_line) {
+        cargo_toml = cargo_toml.replace(&tool_dep_line, "");
+        std::fs::write(&cargo_toml_path, cargo_toml)
+            .expect("Failed to write to Cargo.toml");
+    }
+    
+    // Read and update main.rs to remove import and registration
+    let main_rs_content = std::fs::read_to_string(&main_rs_path)
+        .expect("Failed to read main.rs");
+    
+    let import_line = format!("use {}::{};\n", tool_path, name);
+    let register_line = format!("    app.add_tools({});\n", name);
+    let mut updated_main_rs = main_rs_content.clone();
+    
+    // Remove import if present
+    if updated_main_rs.contains(&import_line) {
+        updated_main_rs = updated_main_rs.replace(&import_line, "");
+    }
+    
+    // Remove tool registration if present
+    if updated_main_rs.contains(&register_line.trim()) {
+        updated_main_rs = updated_main_rs.replace(&register_line, "");
+    }
+    
+    std::fs::write(&main_rs_path, updated_main_rs)
+        .expect("Failed to write to main.rs");
+    
+    println!("Removed {} from agent", name);
+}
+
+fn handle_delete_command(name: &String) {
+    // Check if we are in a yushi project directory by looking for a workspace Cargo.toml
+    let workspace_cargo_toml = PathBuf::from("Cargo.toml");
+    if !workspace_cargo_toml.exists() {
+        eprintln!("Error: No Cargo.toml found in current directory. Please run this command from the root of a yushi project.");
+        std::process::exit(1);
+    }
+
+    // Verify this is a workspace Cargo.toml by checking for [workspace] section
+    let cargo_toml_content = std::fs::read_to_string(&workspace_cargo_toml)
+        .expect("Failed to read Cargo.toml");
+    
+    if !cargo_toml_content.contains("[workspace]") {
+        eprintln!("Error: This doesn't appear to be a yushi workspace. Missing [workspace] section in Cargo.toml.");
+        std::process::exit(1);
+    }
+
+    let project_path = PathBuf::from(name);
+    
+    if !project_path.exists() {
+        eprintln!("Error: Project directory '{}' does not exist", name);
+        std::process::exit(1);
+    }
+    
+    if let Err(e) = std::fs::remove_dir_all(&project_path) {
+        eprintln!("Error: Failed to remove project directory '{}': {}", name, e);
+        std::process::exit(1);
+    }
+    
+    // Update workspace Cargo.toml to remove from members
+    if workspace_cargo_toml.exists() {
+        let cargo_toml_content = std::fs::read_to_string(&workspace_cargo_toml)
+            .expect("Failed to read workspace Cargo.toml");
+        
+        let mut lines: Vec<String> = cargo_toml_content.lines().map(|s| s.to_string()).collect();
+        let mut in_members_section = false;
+        let mut i = 0;
+        
+        while i < lines.len() {
+            let line = &lines[i];
+            
+            if line.trim_start().starts_with("[workspace]") {
+                in_members_section = true;
+            } else if in_members_section && line.contains("members") && line.contains("=") {
+                // Handle members array
+                if line.contains("[") && line.contains("]") {
+                    // Single line members array
+                    let member_entry = format!("\"{}\"", name);
+                    if line.contains(&member_entry) {
+                        let new_line = line.replace(&format!("{}, ", &member_entry), "")
+                            .replace(&format!(", {}", &member_entry), "")
+                            .replace(&member_entry, "");
+                        lines[i] = new_line;
+                    }
+                } else if line.contains("[") {
+                    // Multi-line members array starting
+                    let mut j = i + 1;
+                    while j < lines.len() && !lines[j].contains("]") {
+                        let member_entry = format!("\"{}\"", name);
+                        if lines[j].contains(&member_entry) {
+                            lines.remove(j);
+                            // Don't increment j since we removed a line
+                        } else {
+                            j += 1;
+                        }
+                    }
+                }
+            } else if line.trim_start().starts_with("[") && !line.trim_start().starts_with("[workspace]") {
+                // We've moved to another section
+                in_members_section = false;
+            }
+            
+            i += 1;
+        }
+        
+        let updated_content = lines.join("\n");
+        std::fs::write(&workspace_cargo_toml, updated_content)
+            .expect("Failed to write to workspace Cargo.toml");
+    }
+    
+    println!("Successfully deleted agent '{}'", name);
 }
 
 fn is_upper_camel_case(s: &str) -> bool {
@@ -661,4 +753,37 @@ fn to_snake_case(s: &str) -> String {
         result.push(c.to_ascii_lowercase());
     }
     result
+}
+
+fn get_model_name_from_cargo_toml(cargo_toml_path: &Option<PathBuf>) -> Option<String> {
+    if let Some(path) = cargo_toml_path {
+        if path.exists() {
+            let content = std::fs::read_to_string(path).ok()?;
+            let parsed = toml::from_str::<toml::Value>(&content).ok()?;
+            
+            if let Some(metadata) = parsed.get("package")
+                .and_then(|p| p.get("metadata"))
+                .and_then(|m| m.get("deb")) {
+                
+                if let Some(assets) = metadata.get("assets").and_then(|a| a.as_array()) {
+                    for asset in assets {
+                        if let Some(asset_arr) = asset.as_array() {
+                            if asset_arr.len() > 0 {
+                                if let Some(asset_path) = asset_arr[0].as_str() {
+                                    if asset_path.starts_with("assets/model/") {
+                                        println!("Found model path: {}", asset_path);
+                                        let parts: Vec<&str> = asset_path.split('/').collect();
+                                        if parts.len() >= 3 && parts[1] == "model" {
+                                            return Some(parts[2].to_string());
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+    None
 }

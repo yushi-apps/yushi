@@ -1,0 +1,1 @@
+//! model files only; this lib is a placeholder for cargo-deb

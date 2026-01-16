@@ -50,4 +50,4 @@ For the full list of available tools, see the [**Tools Documentation**](./tool.m
 
 ## Examples
 
-The [LEGO EV3 Agent](./ev3.md) demo shows how to build a smart toy agent on top of LEGO EV3 using `Yushi`.
+The [LEGO EV3 Agent](./zh-CN/ev3.md) demo shows how to build a smart toy agent on top of LEGO EV3 using `Yushi`.

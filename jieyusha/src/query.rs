@@ -100,6 +100,7 @@ pub fn query<'a>(
             ).await;
         }
 
+        log::info!("No tools to use so return assistant message: {assistant_message:?}");
         Ok(assistant_message)
     })
 }

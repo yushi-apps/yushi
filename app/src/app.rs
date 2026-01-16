@@ -30,6 +30,26 @@ impl App {
 
     #[actix_web::main]
     pub async fn run(&self) -> std::io::Result<()> {
+        #[cfg(feature = "model-smallthinker")]
+        {
+            std::process::Command::new("smallthinker")
+                .args([
+                    "-m", "/usr/share/yushi/model.gguf",
+                    "-c", "2048",
+                    "--host", "127.0.0.1",
+                    "--port", "22789",
+                    "-t", "4",
+                    "--jinja",
+                    "--chat-template", "chatml",
+                    "--repeat-penalty", "1.1",
+                    "--offline",
+                ])
+                .spawn()
+                .expect("Failed to start smallthinker server.");
+        }
+
+        log::info!("Model Configuration: {:?}", Registry::instance().get_model_profile("main"));
+
         HttpServer::new(|| {
             ActixApp::new()
                 .service(services::chat)
@@ -100,6 +120,7 @@ impl App {
                 model_parameters["max_tokens"].as_integer(),
                 model_parameters["temperature"].as_float(),
             ) {
+                log::debug!("Temperature: {}", temperature);
                 let profile = ModelProfile::profile()
                     .model_name(name)
                     .base_url(base_url)
@@ -115,6 +136,7 @@ impl App {
     }
 
     pub fn add_agent(&mut self, agent_config: &str) -> &mut Self {
+        log::debug!("Register agent: {}", agent_config);
         Registry::instance().register_agent(agent_config);
         self
     }
