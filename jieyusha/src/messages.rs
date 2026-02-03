@@ -4,12 +4,12 @@ use serde::{Serialize, Deserialize};
 
 use crate::{ModelProfile, Tool, ToolMessage};
 
-#[derive(Debug, Clone)]
+#[derive(Clone)]
 pub enum Message{
     User(UserMessage),
     Assistant(AssistantMessage),
     Tool(ToolMessage),
-    //Progress(ProgressMessage),
+    Progress(ProgressMessage),
 }
 
 #[derive(Debug, Clone)]

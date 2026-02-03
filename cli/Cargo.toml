@@ -1,14 +1,10 @@
 [package]
-name = "cargo-yushi"
+name = "cargo-yucli"
 version = "0.1.0"
 edition = "2024"
 
 [[bin]]
-name = "cargo-yushi"
-path = "src/main.rs"
-
-[[bin]]
-name = "yushi"
+name = "cargo-yucli"
 path = "src/main.rs"
 
 [dependencies]

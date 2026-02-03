@@ -54,22 +54,35 @@ impl LlmProvider for ChatCompletionsProvider {
 
                 Message::Assistant(assistant_message) => {
                     let assistant_json = if let Some(tool_uses) = &assistant_message.tool_uses {
-                        let mut tool_calls = Vec::new();
+                        //let mut tool_calls = Vec::new();
 
-                        for tool_use in tool_uses {
-                            if let Some(tool) = Registry::instance().get_tool(&tool_use.name) {
-                                let prompt = tool.prompt().await;
-                                tool_calls.push(serde_json::json!({
+                        let tool_calls: Vec<serde_json::Value> = tool_uses
+                            .iter()
+                            .map(|tool_use| {
+                                serde_json::json!({
                                     "id": tool_use.id,
                                     "type": "function",
                                     "function": {
                                         "name": tool_use.name,
-                                        "description": prompt,
                                         "arguments": tool_use.arguments.clone(),
                                     }
-                                }));
-                            }
-                        }
+                                })
+                            })
+                            .collect();
+                        //for tool_use in tool_uses {
+                        //    if let Some(tool) = Registry::instance().get_tool(&tool_use.name) {
+                        //        let prompt = tool.prompt().await;
+                        //        tool_calls.push(serde_json::json!({
+                        //            "id": tool_use.id,
+                        //            "type": "function",
+                        //            "function": {
+                        //                "name": tool_use.name,
+                        //                //"description": prompt,
+                        //                "arguments": tool_use.arguments.clone(),
+                        //            }
+                        //        }));
+                        //    }
+                        //}
 
                         serde_json::json!({
                             "role": "assistant",
@@ -94,7 +107,7 @@ impl LlmProvider for ChatCompletionsProvider {
                         "tool_call_id": tool_message.tool_use_id,
                     }));
                 },
-                //Message::Progress(_) => {}
+                Message::Progress(_) => {}
             }
         }
 

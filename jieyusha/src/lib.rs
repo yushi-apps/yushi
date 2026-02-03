@@ -3,14 +3,14 @@ mod chat;
 mod tool;
 mod agent;
 mod query;
-mod messages;
+pub mod messages;
 mod task_tool;
 
 mod error;
 
-pub use chat::chat;
+pub use chat::{chat, chat_stream};
 pub use llm::ModelProfile;
-pub use tool::{Tool, ToolUseContext, ToolMessage};
+pub use tool::{Tool, ToolUseContext, ToolMessage, ToolResult};
 pub use error::{JieyushaError, Result};
 
 use std::sync::{OnceLock, Arc, RwLock};
@@ -36,7 +36,7 @@ impl Registry {
                 tools: RwLock::new(HashMap::new()),
             });
 
-            registry.register_tool(Arc::new(TaskTool));
+            //registry.register_tool(Arc::new(TaskTool));
             registry
         })
     }

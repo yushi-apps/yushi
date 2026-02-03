@@ -3,7 +3,7 @@ use std::path::Path;
 use async_trait::async_trait;
 use serde::Serialize;
 use jieyusha::{JieyushaError, Result};
-use jieyusha::{Tool, ToolUseContext, ToolMessage};
+use jieyusha::{Tool, ToolUseContext, ToolMessage, ToolResult};
 
 pub struct FileReadTool;
 
@@ -56,12 +56,17 @@ impl Tool for FileReadTool {
         "#
     }
 
-    async fn call(&self, input_data: &serde_json::Value, context: &mut ToolUseContext) -> Result<ToolMessage> {
+    async fn call(&self, input_data: &serde_json::Value, context: &ToolUseContext) -> ToolResult {
         let file_path = match input_data.get("file_path").and_then(|v| v.as_str()) {
             Some(s) => s,
-            None => return Err(JieyushaError::ToolError(format!(
-                "missing or non-string file path {input_data}"))),
+            //None => return ToolMessage::error_result(JieyushaError::ToolError(format!(
+            //    "missing or non-string file path {input_data}")))
+
+            None => return ToolMessage::error_result(
+                &format!("missing or non-string file path {input_data}"), 
+                &context.tool_use_id),
         };
+        println!("open file_path:{}", file_path);
 
         let offset = input_data.get("offset").and_then(|v| v.as_u64()).unwrap_or(0) as usize;
         let limit = match input_data.get("limit") {
@@ -76,12 +81,15 @@ impl Tool for FileReadTool {
             .to_lowercase();
 
         if IMAGE_EXTENSIONS.contains(&ext.as_str()) {
-            return Err(JieyushaError::ToolError("Image file reading not implemented yet".to_string()));
+            //return Err(JieyushaError::ToolError("Image file reading not implemented yet".to_string()));
+            return ToolMessage::error_result(
+                "Image file reading not implemented yet", 
+                &context.tool_use_id);
         }
 
-        let text_data = self.read_text_content(file_path, offset, limit)?;
-        let content = serde_json::to_string(&text_data)?;
-        Ok(ToolMessage::new_content(content, context.tool_use_id.clone()))
+        let text_data = self.read_text_content(file_path, offset, limit).unwrap();
+        let content = serde_json::to_string(&text_data).unwrap();
+        ToolMessage::content_result(&content, &context.tool_use_id)
     }
 }
 
@@ -97,6 +105,7 @@ struct TextData {
 
 impl FileReadTool {
     fn read_text_content(&self, file_path: &str, offset: usize, max_lines: Option<usize>) -> Result<TextData> {
+        println!("Reading text file: {}, offset: {}, max_lines: {:?}", file_path, offset, max_lines);
         let content = fs::read_to_string(file_path)?;
         let lines: Vec<&str> = content.lines().collect();
         let total_lines = lines.len();

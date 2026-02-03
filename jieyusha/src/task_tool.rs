@@ -2,12 +2,13 @@ use std::sync::Arc;
 use std::collections::HashMap;
 use async_trait::async_trait;
 use uuid::Uuid;
+use futures::stream::{self, StreamExt};
 use crate::agent;
 use crate::Registry;
 use crate::messages::*;
-use crate::query::query;
-use crate::error::{JieyushaError, Result};
-use crate::tool::{Tool, ToolMessage, ToolUseContext};
+use crate::query::query_stream;
+use crate::error::JieyushaError;
+use crate::tool::{Tool, ToolMessage, ToolUseContext, ToolResult};
 
 pub struct TaskTool;
 
@@ -79,30 +80,27 @@ impl Tool for TaskTool {
         )
     }
 
-    async fn call(&self, input_data: &serde_json::Value, context: &mut ToolUseContext) -> Result<ToolMessage> {
+    async fn call(&self, input_data: &serde_json::Value, context: &ToolUseContext) -> ToolResult {
         let agent_type = match input_data.get("subagent_type").and_then(|v| v.as_str()) {
             Some(s) => s,
-            None => return Err(JieyushaError::ToolError("missing or non-string subagent_type".to_string())),
+            None => return ToolMessage::error_result("missing or non-string subagent_type", &context.tool_use_id),
         };
 
         let prompt = match input_data.get("prompt").and_then(|v| v.as_str()) {
             Some(s) => s,
-            None => return Err(JieyushaError::ToolError("missing or non-string prompt".to_string())),
+            None => return ToolMessage::error_result("missing or non-string prompt", &context.tool_use_id),
         };
 
         let agent_config = match Registry::instance().get_agent(agent_type) {
             Some(config) => config,
             None => {
                 let avaliable_types = Registry::instance().get_all_agent_types();
-                return Ok(ToolMessage::new_error(
-                    format!("Agent type {} not found. Available types: {:?}", agent_type, avaliable_types),
-                    context.tool_use_id.clone(),
-                ));
+                return ToolMessage::error_result(&format!("Agent type {} not found. Available types: {:?}", agent_type, avaliable_types), &context.tool_use_id);
             } 
         };
 
         let effective_prompt = format!("{}\n{}", agent_config.system_prompt, prompt);
-        let messages = vec![Message::User(UserMessage::new(effective_prompt))];
+        let mut messages = vec![Message::User(UserMessage::new(effective_prompt))];
         // Global prompt for all agents.
 
         let agent_id = format!("{}-{}", agent_type, Uuid::new_v4().to_string());
@@ -116,15 +114,26 @@ impl Tool for TaskTool {
             tool_use_id: Uuid::new_v4().to_string(),
         };
 
-        let assistant = query(
-            &messages,
-            &vec![task_prompt],
-            &mut tool_use_contenxt,
+        let mut stream = query_stream(
+            messages.clone(),
+            vec![task_prompt],
+            tool_use_contenxt,
             HashMap::new(),
-        ).await?;
+        );
+
+        while let Some(message) = stream.next().await {
+            //log::info!("{}: Sub-agent {} got message: {:?}", context.agent_id, agent_id, message);
+            messages.push(message);
+            // Here you can handle the messages as needed    
+        }
 
         log::info!("{}: Sub-agent {} finished", context.agent_id, agent_id);
-        Ok(ToolMessage::new_content(assistant.content.clone(), context.tool_use_id.clone()))
+        let last_message = messages.last().unwrap();
+        if let Message::Assistant(assistant) = last_message {
+            return ToolMessage::content_result(&assistant.content, &context.tool_use_id);
+        } else {
+            return ToolMessage::error_result("Sub-agent did not return an assistant message", &context.tool_use_id);
+        }
     }
 }
 

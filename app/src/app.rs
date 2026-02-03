@@ -1,5 +1,7 @@
+use std::env;
 use std::sync::Arc;
 use std::fs::File;
+use std::path::PathBuf;
 use actix_web::{HttpServer, App as ActixApp};
 use uuid::Uuid;
 use jieyusha::{Tool, Registry, ModelProfile};
@@ -11,9 +13,35 @@ pub struct App {
 
 impl Default for App {
     fn default() -> Self {
-        App {
+        let mut app = App {
             name: "DaYuHai".to_string()
+        };
+
+        if let Ok(home) = env::var("HOME") {
+            let root = PathBuf::from(home).join(".yushi");
+
+            let app_prompt_path = root.join("app_prompt.md");
+            if let Ok(prompt) = std::fs::read_to_string(app_prompt_path) {
+                app.add_prompt(&prompt);
+            };
+
+            let agent_prompt_path = root.join("agent_prompt.md");
+            if let Ok(prompt) = std::fs::read_to_string(agent_prompt_path) {
+                app.add_agent_prompt(&prompt);
+            };
+
+            let model_path = root.join("config/model.toml");
+            if let Ok(profile) = std::fs::read_to_string(model_path) {
+                app.add_model(&profile);
+            } 
+            //if let Some(profile) = app.load_model_profile(&model_path) {
+            //    Registry::instance().register_model(&profile);
+            //};
+            if let Some(agents_dir) = root.join("agents").to_str() {
+                Registry::instance().load_all_agents(&agents_dir).expect("Failed to load agents");
+            }
         }
+        app
     }
 }
 
@@ -28,7 +56,7 @@ impl App {
         self
     }
 
-    #[actix_web::main]
+    #[actix_web::main] 
     pub async fn run(&self) -> std::io::Result<()> {
         #[cfg(feature = "model-smallthinker")]
         {
@@ -58,8 +86,6 @@ impl App {
         .run()
         .await
     }
-
-    
 
     pub async fn chat(&self, input: &str) -> String {
         let id = Uuid::new_v4().to_string();

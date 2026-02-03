@@ -1,6 +1,8 @@
 use std::sync::Arc;
+use futures::Stream;
 use async_trait::async_trait;
 use crate::error::Result;
+use crate::messages::Message;
 
 #[derive(Debug, Clone)]
 pub struct ToolMessage {
@@ -9,6 +11,8 @@ pub struct ToolMessage {
     pub is_error: bool,
     pub tool_use_id: String,
 }
+
+pub type ToolResult = Box<dyn Stream<Item = Message> + Unpin + Send>;
 
 impl ToolMessage {
     pub fn new_error(error: impl Into<String>, tool_use_id: impl Into<String>) -> Self {
@@ -28,8 +32,21 @@ impl ToolMessage {
             tool_use_id: tool_use_id.into(),
         }
     }
+
+    pub fn error_result(error: &str, tool_use_id: &str) -> ToolResult {
+        let message = ToolMessage::new_error(error, tool_use_id); 
+        let stream = futures::stream::iter(vec![Message::Tool(message)]);
+        Box::new(stream)
+    }
+
+    pub fn content_result(content: &str, tool_use_id: &str) -> ToolResult {
+        let message = ToolMessage::new_content(content, tool_use_id);
+        let stream = futures::stream::iter(vec![Message::Tool(message)]);
+        Box::new(stream)
+    }
 }
 
+#[derive(Clone)]
 pub struct ToolUseContext {
     pub model: Option<String>,
     pub tools: Vec<Arc<dyn Tool>>,
@@ -44,5 +61,6 @@ pub trait Tool: Send + Sync {
     fn input_json_schema(&self) -> &str;
     fn description(&self) -> &str;
     async fn prompt(&self) -> String;
-    async fn call(&self, input_data: &serde_json::Value, context: &mut ToolUseContext) -> Result<ToolMessage>;
+    //async fn call(&self, input_data: &serde_json::Value, context: &ToolUseContext) -> Result<ToolMessage>;
+    async fn call(&self, input_data: &serde_json::Value, context: &ToolUseContext) -> ToolResult;
 }

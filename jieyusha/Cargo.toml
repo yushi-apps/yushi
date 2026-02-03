@@ -7,6 +7,8 @@ edition = "2024"
 glob = "0.3"
 reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls"] }
 thiserror = "2.0.11"
+async-stream = "0.3"
+futures = "0.3"
 
 log.workspace = true
 serde.workspace = true

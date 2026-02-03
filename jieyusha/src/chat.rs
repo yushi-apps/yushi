@@ -5,12 +5,13 @@ use tracing::instrument;
 use crate::Registry;
 use crate::Result;
 use crate::ToolUseContext;
-use crate::query::query;
+use crate::query::query_stream;
 use crate::messages::*;
+use futures::stream::{Stream, StreamExt};
 
 #[instrument(skip_all)]
 pub async fn chat(user_input: &str, session_id: &str) -> Result<String> {
-    let mut tool_use_context = ToolUseContext {
+    let tool_use_context = ToolUseContext {
         model: None, 
         tools: Registry::instance().get_all_tools(),
         agent_id: format!("main-{}", session_id),
@@ -27,13 +28,41 @@ pub async fn chat(user_input: &str, session_id: &str) -> Result<String> {
     log::info!("System Prompt Build ({}ms)", elapsed.as_millis());
     log::info!("{}: Processing query {:?}", tool_use_context.agent_id, user_input);
 
-    let assistant =  query(
-        &vec![user_message],
-        &vec![system_prompt],
-        &mut tool_use_context,
+    let agent_id = tool_use_context.agent_id.clone();
+    let mut response_stream = query_stream(
+        vec![user_message],
+        vec![system_prompt],
+        tool_use_context,
         HashMap::new(),
-    ).await?;
-    
-    log::info!("{}: Assistant Response: {}", tool_use_context.agent_id, assistant.content);
-    Ok(assistant.content)
+    );
+
+    let mut full_response = String::new();
+    while let Some(message) = response_stream.next().await {
+        if let Message::Assistant(assistant_msg) = message {
+            full_response.push_str(&assistant_msg.content);
+        }
+    }
+
+    log::info!("{}: Assistant Response: {}", agent_id, full_response);
+    Ok(full_response)
+}
+
+pub fn chat_stream(user_input: &str, session_id: &str) -> impl Stream<Item = Message> {
+    let tool_use_context = ToolUseContext {
+        model: None,
+        tools: Registry::instance().get_all_tools(),
+        agent_id: format!("main-{}", session_id),
+        abort_signal: false,
+        tool_use_id: "".to_string(),
+    };
+
+    let user_message = Message::User(UserMessage::new(user_input));
+    let system_prompt = Registry::instance().get_system_prompt();
+
+    query_stream(
+        vec![user_message],
+        vec![system_prompt],
+        tool_use_context,
+        HashMap::new(),
+    )
 }
