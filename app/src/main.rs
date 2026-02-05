@@ -3,11 +3,14 @@ use std::fs::{self, OpenOptions};
 use std::path::PathBuf;
 use std::env;
 use std::borrow::Cow;
-use app::App;
+
+use futures::StreamExt;
 use reedline::{Reedline, Signal, FileBackedHistory, History};
 use reedline::{Prompt, PromptEditMode, PromptHistorySearch};
 use reedline::HistoryItem;
 
+use app::App;
+use jieyusha::messages::Message;
 use file_read_tool::FileReadTool;
 
 enum Mode {
@@ -285,7 +288,7 @@ async fn run(app: &App) -> io::Result<()> {
                         let content = read_multiline_prefilled(Some(line))?;
                         if !content.trim().is_empty() {
                             add_to_history(&content);
-                            println!("❉ Thinking...");
+                            println!("❉ Working...");
                             let response = app.chat(&content).await;
                             print_formatted_response(&response);
                             add_to_history(&response);
@@ -309,11 +312,25 @@ async fn run(app: &App) -> io::Result<()> {
                 } else if line.trim().is_empty() {
                     continue;
                 } else {
-                    println!("❉ Thinking...");
-                    let response = app.chat(&line).await;
-                    print_formatted_response(&response);
                     add_to_history(&line);
-                    add_to_history(&response);
+
+                    println!("❉ Thinking...");
+                    //let response = app.chat(&line).await;
+                    let mut stream = app.chat_stream(&line);
+                    while let Some(message) = stream.next().await {
+                        match message {
+                            Message::Assistant(msg) => {
+                                print_formatted_response(&msg.content);
+                            }
+                            Message::Progress(msg) => {
+                                show_progress_message(&msg);
+                            }
+                            _ => {}
+                        }
+                    }
+
+                    //print_formatted_response(&response);
+                    //add_to_history(&response);
 
                 }
             }
@@ -341,7 +358,7 @@ async fn run(app: &App) -> io::Result<()> {
             Mode::Multiline => {
                 let content = read_multiline_prefilled(None)?;
                 if !content.trim().is_empty() {
-                    println!("• Thinking...");
+                    println!("• Working...");
                     let response = app.chat(&content).await;
                     print_formatted_response(&response);
                     add_to_history(&content);
@@ -413,4 +430,8 @@ fn add_to_history(content: &str) {
             eprintln!("Failed to save to history: {}", e);
         }
     }
+}
+
+fn show_progress_message(message: &jieyusha::messages::ProgressMessage) {
+    println!("{}", message.content.content);
 }

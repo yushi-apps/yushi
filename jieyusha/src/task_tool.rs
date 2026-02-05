@@ -2,13 +2,12 @@ use std::sync::Arc;
 use std::collections::HashMap;
 use async_trait::async_trait;
 use uuid::Uuid;
-use futures::stream::{self, StreamExt};
+use futures::stream::StreamExt;
 use crate::agent;
 use crate::Registry;
 use crate::messages::*;
-use crate::query::query_stream;
-use crate::error::JieyushaError;
-use crate::tool::{Tool, ToolMessage, ToolUseContext, ToolResult};
+use crate::query::query;
+use crate::tool::{Tool, ToolUseContext, ToolResult};
 
 pub struct TaskTool;
 
@@ -81,21 +80,23 @@ impl Tool for TaskTool {
     }
 
     async fn call(&self, input_data: &serde_json::Value, context: &ToolUseContext) -> ToolResult {
+        let tool_use_id = context.tool_use_id.clone();
         let agent_type = match input_data.get("subagent_type").and_then(|v| v.as_str()) {
-            Some(s) => s,
-            None => return ToolMessage::error_result("missing or non-string subagent_type", &context.tool_use_id),
+            Some(s) => s.to_string(),
+            None => return ToolResult::error("missing or non-string subagent_type", &tool_use_id)
         };
 
         let prompt = match input_data.get("prompt").and_then(|v| v.as_str()) {
-            Some(s) => s,
-            None => return ToolMessage::error_result("missing or non-string prompt", &context.tool_use_id),
+            Some(s) => s.to_string(),
+            None => return ToolResult::error("missing or non-string prompt", &tool_use_id)
         };
 
-        let agent_config = match Registry::instance().get_agent(agent_type) {
+        let agent_config = match Registry::instance().get_agent(&agent_type) {
             Some(config) => config,
             None => {
                 let avaliable_types = Registry::instance().get_all_agent_types();
-                return ToolMessage::error_result(&format!("Agent type {} not found. Available types: {:?}", agent_type, avaliable_types), &context.tool_use_id);
+                return ToolResult::error(&format!("Agent type {} not found. Available types: {:?}",
+                    agent_type, avaliable_types), &tool_use_id);
             } 
         };
 
@@ -106,7 +107,7 @@ impl Tool for TaskTool {
         let agent_id = format!("{}-{}", agent_type, Uuid::new_v4().to_string());
         log::info!("{}: Create a new sub-agent {}", context.agent_id, agent_id);
         let task_prompt = agent::get_agent_prompt();
-        let mut tool_use_contenxt = ToolUseContext {
+        let tool_use_contenxt = ToolUseContext {
             model: None,
             tools: self.get_task_tools(agent_config.tools), 
             agent_id: agent_id.clone(),
@@ -114,26 +115,27 @@ impl Tool for TaskTool {
             tool_use_id: Uuid::new_v4().to_string(),
         };
 
-        let mut stream = query_stream(
-            messages.clone(),
-            vec![task_prompt],
-            tool_use_contenxt,
-            HashMap::new(),
-        );
+        let stream = async_stream::stream! {
+            let mut stream = query(
+                messages.clone(),
+                vec![task_prompt],
+                tool_use_contenxt,
+                HashMap::new(),
+            );
 
-        while let Some(message) = stream.next().await {
-            //log::info!("{}: Sub-agent {} got message: {:?}", context.agent_id, agent_id, message);
-            messages.push(message);
-            // Here you can handle the messages as needed    
-        }
+            while let Some(message) = stream.next().await {
+                messages.push(message);
+            }
 
-        log::info!("{}: Sub-agent {} finished", context.agent_id, agent_id);
-        let last_message = messages.last().unwrap();
-        if let Message::Assistant(assistant) = last_message {
-            return ToolMessage::content_result(&assistant.content, &context.tool_use_id);
-        } else {
-            return ToolMessage::error_result("Sub-agent did not return an assistant message", &context.tool_use_id);
-        }
+            let last_message = messages.last().unwrap();
+            if let Message::Assistant(assistant) = last_message {
+                yield Message::Tool(ToolMessage::new_content(assistant.content.clone(), &tool_use_id));
+            } else {
+                yield Message::Tool(ToolMessage::from_error("Sub-agent did not return an assistant message", &tool_use_id));
+            }
+        };
+
+        ToolResult::new(Box::pin(stream))
     }
 }
 

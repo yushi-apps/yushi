@@ -1,9 +1,12 @@
 use std::fs;
 use std::path::Path;
 use async_trait::async_trait;
+use jieyusha::messages::{Message, ProgressMessage, ToolMessage, AssistantMessage};
 use serde::Serialize;
 use jieyusha::{JieyushaError, Result};
-use jieyusha::{Tool, ToolUseContext, ToolMessage, ToolResult};
+use jieyusha::{Tool, ToolUseContext, ToolResult};
+use futures::stream::BoxStream;
+use futures::stream::{self, StreamExt};
 
 pub struct FileReadTool;
 
@@ -57,39 +60,67 @@ impl Tool for FileReadTool {
     }
 
     async fn call(&self, input_data: &serde_json::Value, context: &ToolUseContext) -> ToolResult {
-        let file_path = match input_data.get("file_path").and_then(|v| v.as_str()) {
-            Some(s) => s,
-            //None => return ToolMessage::error_result(JieyushaError::ToolError(format!(
-            //    "missing or non-string file path {input_data}")))
+            //println!("FileReadTool: Reading file {}", file_path);
+            //yield ToolMessage::progress("Read file", &context.tool_use_id);
 
-            None => return ToolMessage::error_result(
-                &format!("missing or non-string file path {input_data}"), 
-                &context.tool_use_id),
+            let tool_use_id = context.tool_use_id.clone();
+            let file_path = match input_data.get("file_path").and_then(|v| v.as_str()) {
+                Some(s) => s.to_string(),
+                None => return ToolResult::error(
+                    "missing or non-string file_path", 
+                    &context.tool_use_id)
+                //{
+                //    yield Message::Tool(ToolMessage::from_error(
+                //        &format!("missing or non-string file path {input_data}"), 
+                //        &context.tool_use_id));
+                //    return;
+               // }
+            };
+            
+            let offset = input_data.get("offset").and_then(|v| v.as_u64()).unwrap_or(0) as usize;
+            let limit = match input_data.get("limit") {
+                Some(o) => o.as_u64().map(|v| v as usize),
+                None => None,
+            };
+
+            let ext = Path::new(&file_path)
+                .extension()
+                .and_then(|ext| ext.to_str())
+                .unwrap_or("")
+                .to_lowercase();
+
+            if IMAGE_EXTENSIONS.contains(&ext.as_str()) {
+                return ToolResult::error(
+                    "Image file reading not implemented yet", 
+                    &context.tool_use_id);
+                //yield Message::Tool(ToolMessage::from_error(
+                //    "Image file reading not implemented yet", 
+                //    &context.tool_use_id));
+                //return;
+            }
+
+        let stream = async_stream::stream! {
+            yield Message::Progress(ProgressMessage {
+                r#type: "progress".to_string(),
+                content: AssistantMessage::new(&format!("Reading text file: {}", file_path)),
+                tools: None,
+                tool_use_id: Some(tool_use_id.clone()),
+            });
+            match Self::read_text_content(&file_path, offset, limit) {
+                Ok(text_data) => {
+                    let content = serde_json::to_string(&text_data).unwrap();
+                    yield Message::Tool(ToolMessage::new_content(
+                        &content, 
+                        &tool_use_id));
+                }
+                Err(e) => {
+                    yield Message::Tool(ToolMessage::from_error(
+                        &format!("Error reading file: {}", e), 
+                        &tool_use_id));
+                }
+            }
         };
-        println!("open file_path:{}", file_path);
-
-        let offset = input_data.get("offset").and_then(|v| v.as_u64()).unwrap_or(0) as usize;
-        let limit = match input_data.get("limit") {
-            Some(o) => o.as_u64().map(|v| v as usize),
-            None => None,
-        };
-
-        let ext = Path::new(file_path)
-            .extension()
-            .and_then(|ext| ext.to_str())
-            .unwrap_or("")
-            .to_lowercase();
-
-        if IMAGE_EXTENSIONS.contains(&ext.as_str()) {
-            //return Err(JieyushaError::ToolError("Image file reading not implemented yet".to_string()));
-            return ToolMessage::error_result(
-                "Image file reading not implemented yet", 
-                &context.tool_use_id);
-        }
-
-        let text_data = self.read_text_content(file_path, offset, limit).unwrap();
-        let content = serde_json::to_string(&text_data).unwrap();
-        ToolMessage::content_result(&content, &context.tool_use_id)
+        ToolResult::new(Box::pin(stream))
     }
 }
 
@@ -104,8 +135,8 @@ struct TextData {
 } 
 
 impl FileReadTool {
-    fn read_text_content(&self, file_path: &str, offset: usize, max_lines: Option<usize>) -> Result<TextData> {
-        println!("Reading text file: {}, offset: {}, max_lines: {:?}", file_path, offset, max_lines);
+    fn read_text_content(file_path: &str, offset: usize, max_lines: Option<usize>) -> Result<TextData> {
+        //println!("Reading text file: {}, offset: {}, max_lines: {:?}", file_path, offset, max_lines);
         let content = fs::read_to_string(file_path)?;
         let lines: Vec<&str> = content.lines().collect();
         let total_lines = lines.len();

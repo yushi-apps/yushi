@@ -2,7 +2,7 @@ use std::sync::Arc;
 use uuid::Uuid;
 use serde::{Serialize, Deserialize};
 
-use crate::{ModelProfile, Tool, ToolMessage};
+use crate::{ModelProfile, Tool};
 
 #[derive(Clone)]
 pub enum Message{
@@ -49,6 +49,34 @@ impl AssistantMessage {
             uuid: Uuid::new_v4().to_string(),
             tool_uses: None,
             //duration_ms: 0,
+        }
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct ToolMessage {
+    pub r#type: String,
+    pub content: String,
+    pub is_error: bool,
+    pub tool_use_id: String,
+}
+
+impl ToolMessage {
+    pub fn from_error(error: impl Into<String>, tool_use_id: impl Into<String>) -> Self {
+        Self {
+            r#type: "tool_result".to_string(),
+            content: error.into(),
+            is_error: true,
+            tool_use_id: tool_use_id.into(),
+        }
+    }
+
+    pub fn new_content(content: impl Into<String>, tool_use_id: impl Into<String>) -> Self {
+        Self {
+            r#type: "tool_result".to_string(),
+            content: content.into(),
+            is_error: false,
+            tool_use_id: tool_use_id.into(),
         }
     }
 }

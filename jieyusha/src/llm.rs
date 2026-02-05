@@ -1,6 +1,5 @@
 use serde::{Serialize, Deserialize};
 use async_trait::async_trait;
-use crate::Registry;
 use crate::error::{Result, JieyushaError};
 use crate::messages::{Message, ChatMessage, AssistantMessage, UnifiedRequest, ToolUse};
 
@@ -69,20 +68,6 @@ impl LlmProvider for ChatCompletionsProvider {
                                 })
                             })
                             .collect();
-                        //for tool_use in tool_uses {
-                        //    if let Some(tool) = Registry::instance().get_tool(&tool_use.name) {
-                        //        let prompt = tool.prompt().await;
-                        //        tool_calls.push(serde_json::json!({
-                        //            "id": tool_use.id,
-                        //            "type": "function",
-                        //            "function": {
-                        //                "name": tool_use.name,
-                        //                //"description": prompt,
-                        //                "arguments": tool_use.arguments.clone(),
-                        //            }
-                        //        }));
-                        //    }
-                        //}
 
                         serde_json::json!({
                             "role": "assistant",
@@ -175,7 +160,6 @@ impl LlmProvider for ChatCompletionsProvider {
         let bytes = response.bytes().await?;
         log::debug!("LLM Response Raw: {:?}", String::from_utf8_lossy(&bytes));
 
-        //let llm_response: ChatCompletionResponse = response.json().await?;
         let llm_response: ChatCompletionResponse = serde_json::from_slice(&bytes)?;
         let chat_message = match llm_response
             .choices

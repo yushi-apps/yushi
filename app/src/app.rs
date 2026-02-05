@@ -4,7 +4,8 @@ use std::fs::File;
 use std::path::PathBuf;
 use actix_web::{HttpServer, App as ActixApp};
 use uuid::Uuid;
-use jieyusha::{Tool, Registry, ModelProfile};
+use jieyusha::{Tool, Registry, ModelProfile, chat_stream};
+use jieyusha::messages::Message;
 use crate::services;
 
 pub struct App {
@@ -93,6 +94,11 @@ impl App {
             Ok(output) => output,
             Err(err) => format!("Error: {}", err),
         }
+    }
+
+    pub fn chat_stream(&self, input: &str) -> impl futures::Stream<Item = Message> {
+        let id = Uuid::new_v4().to_string();
+        chat_stream(input, id)
     }
 
     pub fn trace(&mut self, level: &str) -> &mut Self {

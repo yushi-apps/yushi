@@ -1,48 +1,40 @@
 use std::sync::Arc;
+use std::pin::Pin;
 use futures::Stream;
 use async_trait::async_trait;
-use crate::error::Result;
-use crate::messages::Message;
+use crate::messages::{Message, AssistantMessage, ToolMessage, ProgressMessage};
 
-#[derive(Debug, Clone)]
-pub struct ToolMessage {
-    pub r#type: String,
-    pub content: String,
-    pub is_error: bool,
-    pub tool_use_id: String,
+pub struct ToolResult {
+    pub stream: Pin<Box<dyn Stream<Item = Message> + Send>>
 }
 
-pub type ToolResult = Box<dyn Stream<Item = Message> + Unpin + Send>;
-
-impl ToolMessage {
-    pub fn new_error(error: impl Into<String>, tool_use_id: impl Into<String>) -> Self {
-        Self {
-            r#type: "tool_result".to_string(),
-            content: error.into(),
-            is_error: true,
-            tool_use_id: tool_use_id.into(),
-        }
+impl ToolResult {
+    pub fn new(stream: Pin<Box<dyn Stream<Item = Message> + Send>>) -> Self {
+        Self { stream }
     }
 
-    pub fn new_content(content: impl Into<String>, tool_use_id: impl Into<String>) -> Self {
-        Self {
-            r#type: "tool_result".to_string(),
-            content: content.into(),
-            is_error: false,
-            tool_use_id: tool_use_id.into(),
-        }
-    }
-
-    pub fn error_result(error: &str, tool_use_id: &str) -> ToolResult {
-        let message = ToolMessage::new_error(error, tool_use_id); 
+    pub fn error(error: impl Into<String>, tool_use_id: impl Into<String>) -> Self {
+        let message = ToolMessage::from_error(error, tool_use_id); 
         let stream = futures::stream::iter(vec![Message::Tool(message)]);
-        Box::new(stream)
+        Self::new(Box::pin(stream))
     }
 
-    pub fn content_result(content: &str, tool_use_id: &str) -> ToolResult {
+    pub fn progress(content: &str, tool_use_id: &str) -> ToolResult {
+        let message =    ProgressMessage {
+            r#type: "progress".to_string(),
+            content: AssistantMessage::new(content),
+            tools: None,
+            tool_use_id: Some(tool_use_id.to_string()),
+        };
+        println!("new progress message");
+        let stream = futures::stream::iter(vec![Message::Progress(message)]);
+        Self::new(Box::pin(stream))
+    }
+
+    pub fn result(content: &str, tool_use_id: &str) -> ToolResult {
         let message = ToolMessage::new_content(content, tool_use_id);
         let stream = futures::stream::iter(vec![Message::Tool(message)]);
-        Box::new(stream)
+        Self::new(Box::pin(stream))
     }
 }
 
@@ -61,6 +53,5 @@ pub trait Tool: Send + Sync {
     fn input_json_schema(&self) -> &str;
     fn description(&self) -> &str;
     async fn prompt(&self) -> String;
-    //async fn call(&self, input_data: &serde_json::Value, context: &ToolUseContext) -> Result<ToolMessage>;
     async fn call(&self, input_data: &serde_json::Value, context: &ToolUseContext) -> ToolResult;
 }
