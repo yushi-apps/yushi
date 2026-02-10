@@ -11,7 +11,8 @@ use reedline::HistoryItem;
 
 use app::App;
 use jieyusha::messages::Message;
-use file_read_tool::FileReadTool;
+use bash::BashTool;
+//use file_read_tool::FileReadTool;
 
 enum Mode {
 	Dialog,
@@ -378,7 +379,7 @@ async fn run(app: &App) -> io::Result<()> {
 #[tokio::main]
 async fn main() {
     let mut app = App::new();
-	app.add_tools(FileReadTool);
+    app.add_tools(BashTool);
     app.trace("DEBUG");
     if let Err(e) = run(&app).await {
         eprintln!("Error: {}", e);
