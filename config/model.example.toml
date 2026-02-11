@@ -9,7 +9,7 @@ description = "DeepSeek Chat Model - OpenAI Compatible API"
 
 [model.api]
 # Obtain your API key from the official platform of the service provider.
-api_key = "sk-5f409be3d2cf459aa53928797e83b5bb"
+api_key = "your_api_key"
 # Base URL of the model service.
 base_url = "https://api.deepseek.com/chat/completions"
 
