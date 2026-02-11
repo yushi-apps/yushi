@@ -1,7 +1,6 @@
 use std::io::{self, Write};
 use std::fs::{self, OpenOptions};
 use std::path::PathBuf;
-use std::env;
 use std::borrow::Cow;
 
 use futures::StreamExt;
@@ -9,6 +8,7 @@ use reedline::{Reedline, Signal, FileBackedHistory, History};
 use reedline::{Prompt, PromptEditMode, PromptHistorySearch};
 use reedline::HistoryItem;
 
+mod app;
 use app::App;
 use jieyusha::messages::Message;
 use bash::BashTool;
@@ -21,25 +21,15 @@ enum Mode {
 	Multiline,
 }
 
-fn install_root_path() -> PathBuf {
-    let home = env::var("HOME").expect("Failed to get $HOME");
-    let path = PathBuf::from(home).join(".yushi");
-    if !path.exists() {
-        fs::create_dir_all(&path).expect("Failed to create install root directory");
-    }
-
-    path
-}
-
 fn agents_md_path() -> PathBuf {
-	install_root_path().join("AGENTS.md")
+	App::root_path().join("AGENTS.md")
 }
 
 fn agents_dir_path() -> PathBuf {
-	install_root_path().join("agents")
+	App::root_path().join("agents")
 }
 
-fn read_line(prompt: &str) -> io::Result<String> {
+fn read_line(_prompt: &str) -> io::Result<String> {
     let mut rl = Reedline::create();
     if let Some(history) = get_history() {
         rl = rl.with_history(Box::new(history));
@@ -219,7 +209,7 @@ fn handle_slash_command(cmd: &str) -> bool {
 			}
 		}
 		"config" => {
-			let repo_root = install_root_path();
+			let repo_root = App::root_path();
 			println!("Yushi CLI config:");
 			println!("- Runtime: tokio");
 			println!("- Install root: {}", repo_root.display());
@@ -379,8 +369,9 @@ async fn run(app: &App) -> io::Result<()> {
 #[tokio::main]
 async fn main() {
     let mut app = App::new();
-    app.add_tools(BashTool);
     app.trace("DEBUG");
+
+    app.add_tools(BashTool);
     if let Err(e) = run(&app).await {
         eprintln!("Error: {}", e);
     }
@@ -421,7 +412,7 @@ fn print_formatted_response(response: &str) {
 }
 
 fn get_history() -> Option<FileBackedHistory> {
-	let path = install_root_path().join("history.txt");
+	let path = App::root_path().join("history.txt");
 	FileBackedHistory::with_file(1000, path).ok()
 }
 

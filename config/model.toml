@@ -1,0 +1,20 @@
+
+# Model Configuration
+
+[model]
+name = "deepseek-chat"
+type = "chat"
+version = "v3.2"
+description = "DeepSeek Chat Model - OpenAI Compatible API"
+
+[model.api]
+# Obtain your API key from the official platform of the service provider.
+api_key = "sk-5f409be3d2cf459aa53928797e83b5bb"
+# Base URL of the model service.
+base_url = "https://api.deepseek.com/chat/completions"
+
+[model.parameters]
+max_tokens = 8192 # Maximum tokens for input and output combined.
+temperature = 0.2 # Control output randomness: lower values (such as 0.2) are more certain, higher values (such as 0.9) are more creative.
+top_p = 0.9       # Nucleus Sampling: Control diversity: 0.5 means only the top 50% of the most probable tokens are considered. 
+            

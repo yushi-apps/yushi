@@ -5,7 +5,8 @@ mod agent;
 mod query;
 pub mod messages;
 mod task_tool;
-
+mod skill;
+mod utils;
 mod error;
 
 pub use chat::{chat, chat_stream};
@@ -16,6 +17,8 @@ pub use error::{JieyushaError, Result};
 use std::sync::{OnceLock, Arc, RwLock};
 use std::collections::HashMap;
 use task_tool::TaskTool;
+use std::fmt;
+pub use skill::SkillTool;
 pub struct Registry {
     system_prompt: RwLock<String>,
     agent_prompt: RwLock<String>,
@@ -37,6 +40,7 @@ impl Registry {
             });
 
             registry.register_tool(Arc::new(TaskTool));
+            registry.register_tool(Arc::new(SkillTool));
             registry
         })
     }
@@ -73,7 +77,8 @@ impl Registry {
     }
 
     pub fn register_system_prompt(&self, prompt: String) {
-        *self.system_prompt.write().unwrap() = prompt;
+        let prompt = prompt.trim();
+        *self.system_prompt.write().unwrap() = prompt.to_string();
     }
 
     pub fn get_system_prompt(&self) -> String {
@@ -112,5 +117,50 @@ impl Registry {
 
     pub fn get_all_agent_types(&self) -> Vec<String> {
         self.agents.read().unwrap().keys().cloned().collect()
+    }
+}
+
+impl fmt::Display for Registry {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        // Write system prompt info
+        writeln!(f, "\nSystem Prompt:")?;
+        writeln!(f, "{}", self.get_system_prompt())?;
+        
+        // Write agent prompt info
+        writeln!(f, "{}", self.get_agent_prompt())?;
+        
+        // Write models info
+        let models = self.models.read().unwrap();
+        if !models.is_empty() {
+            for (name, profile) in models.iter() {
+                writeln!(f, "\nModel: {} ({})", profile.model_name, name)?;
+                writeln!(f, "  Base URL: {}", profile.base_url)?;
+                writeln!(f, "  Max tokens: {}", profile.max_tokens)?;
+                writeln!(f, "  Temperature: {}", profile.temperature)?;
+            }
+        }
+        
+        // Write tools info
+        let tools = self.tools.read().unwrap();
+        if !tools.is_empty() {
+            for (name, tool) in tools.iter() {
+                writeln!(f, "\nTool: {}", name)?;
+                writeln!(f, "  Description: {}", tool.description())?;
+                writeln!(f, "  Schema: {}", tool.input_json_schema())?;
+            }
+        }
+        
+        // Write agents info
+        let agents = self.agents.read().unwrap();
+        if !agents.is_empty() {
+            for (agent_type, config) in agents.iter() {
+                writeln!(f, "\nAgent: {}", agent_type)?;
+                writeln!(f, "  Description: {}", config.description)?;
+                writeln!(f, "  Model: {}", config.model_name)?;
+                writeln!(f, "  Tools: {:?}", config.tools)?;
+            }
+        }
+        
+        Ok(())
     }
 }

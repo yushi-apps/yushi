@@ -2,11 +2,9 @@ use std::env;
 use std::sync::Arc;
 use std::fs::File;
 use std::path::PathBuf;
-use actix_web::{HttpServer, App as ActixApp};
 use uuid::Uuid;
-use jieyusha::{Tool, Registry, ModelProfile, chat_stream};
+use jieyusha::{Tool, Registry, ModelProfile, chat_stream, SkillTool};
 use jieyusha::messages::Message;
-use crate::services;
 
 pub struct App {
     name: String
@@ -18,30 +16,41 @@ impl Default for App {
             name: "DaYuHai".to_string()
         };
 
-        if let Ok(home) = env::var("HOME") {
-            let root = PathBuf::from(home).join(".yushi");
+        let root = App::root_path();
 
-            let app_prompt_path = root.join("app_prompt.md");
-            if let Ok(prompt) = std::fs::read_to_string(app_prompt_path) {
-                app.add_prompt(&prompt);
-            };
+        let mut skills = "".to_string();
+        if let Some(skills_dir) = root.join("skills").to_str() {
+            skills = SkillTool::load_skills(skills_dir);
+        }
 
-            let agent_prompt_path = root.join("agent_prompt.md");
-            if let Ok(prompt) = std::fs::read_to_string(agent_prompt_path) {
-                app.add_agent_prompt(&prompt);
-            };
+        let app_prompt_path = root.join("YUSHI.md");
+        if let Ok(prompt) = std::fs::read_to_string(app_prompt_path) {
+            let prompt = format!("{}\n{}", prompt, skills);
+            app.add_prompt(&prompt);
+        } else {
+            app.add_prompt(&skills);
+        };
 
-            let model_path = root.join("config/model.toml");
-            if let Ok(profile) = std::fs::read_to_string(model_path) {
-                app.add_model(&profile);
-            } 
-            //if let Some(profile) = app.load_model_profile(&model_path) {
-            //    Registry::instance().register_model(&profile);
-            //};
-            if let Some(agents_dir) = root.join("agents").to_str() {
-                Registry::instance().load_all_agents(&agents_dir).expect("Failed to load agents");
+        let agent_prompt_path = root.join("AGENTS.md");
+        if let Ok(prompt) = std::fs::read_to_string(agent_prompt_path) {
+            app.add_agent_prompt(&prompt);
+        };
+
+        let model_path = root.join("config/model.toml");
+        if let Ok(profile) = std::fs::read_to_string(model_path) {
+            app.add_model(&profile);
+        } 
+
+        //if let Some(profile) = app.load_model_profile(&model_path) {
+        //    Registry::instance().register_model(&profile);
+        //};
+        if let Some(agents_dir) = root.join("agents").to_str() {
+            let path = PathBuf::from(agents_dir);
+            if path.exists() && path.is_dir() {
+                Registry::instance().load_all_agents(agents_dir).expect("Failed to load agents");
             }
         }
+
         app
     }
 }
@@ -52,41 +61,56 @@ impl App {
         App::default()
     }
 
+    pub fn root_path() -> PathBuf {
+        if let Ok(home) = env::var("HOME") {
+            let yushi_path = PathBuf::from(home).join(".yushi");
+            if yushi_path.exists() {
+                yushi_path
+            } else {
+                let manifest_dir = env!("CARGO_MANIFEST_DIR");
+                PathBuf::from(manifest_dir).parent().unwrap().to_path_buf()
+            }
+        } else {
+            let manifest_dir = env!("CARGO_MANIFEST_DIR");
+            PathBuf::from(manifest_dir).parent().unwrap().to_path_buf()
+        }
+    }
+
     pub fn add_tools(&mut self, tool: impl Tool + 'static) -> &mut Self{
         Registry::instance().register_tool(Arc::new(tool));
         self
     }
 
-    #[actix_web::main] 
-    pub async fn run(&self) -> std::io::Result<()> {
-        #[cfg(feature = "model-smallthinker")]
-        {
-            std::process::Command::new("smallthinker")
-                .args([
-                    "-m", "/usr/share/yushi/model.gguf",
-                    "-c", "2048",
-                    "--host", "127.0.0.1",
-                    "--port", "22789",
-                    "-t", "4",
-                    "--jinja",
-                    "--chat-template", "chatml",
-                    "--repeat-penalty", "1.1",
-                    "--offline",
-                ])
-                .spawn()
-                .expect("Failed to start smallthinker server.");
-        }
+    //#[actix_web::main] 
+    //pub async fn run(&self) -> std::io::Result<()> {
+    //    #[cfg(feature = "model-smallthinker")]
+    //    {
+    //        std::process::Command::new("smallthinker")
+    //            .args([
+    //                "-m", "/usr/share/yushi/model.gguf",
+    //                "-c", "2048",
+    //                "--host", "127.0.0.1",
+    //                "--port", "22789",
+    //                "-t", "4",
+    //                "--jinja",
+    //                "--chat-template", "chatml",
+    //                "--repeat-penalty", "1.1",
+    //                "--offline",
+    //            ])
+    //            .spawn()
+    //            .expect("Failed to start smallthinker server.");
+    //    }
 
-        log::info!("Model Configuration: {:?}", Registry::instance().get_model_profile("main"));
+    //    log::info!("Model Configuration: {:?}", Registry::instance().get_model_profile("main"));
 
-        HttpServer::new(|| {
-            ActixApp::new()
-                .service(services::chat)
-        })
-        .bind("0.0.0.0:22786")?
-        .run()
-        .await
-    }
+    //    HttpServer::new(|| {
+    //        ActixApp::new()
+    //            .service(services::chat)
+    //    })
+    //    .bind("0.0.0.0:22786")?
+    //    .run()
+    //    .await
+    //}
 
     pub async fn chat(&self, input: &str) -> String {
         let id = Uuid::new_v4().to_string();
@@ -124,6 +148,7 @@ impl App {
             .with_writer(file)
             .init();
 
+        log::debug!("Default Registry: {}", Registry::instance());
         self
     }
 
