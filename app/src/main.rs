@@ -1,32 +1,20 @@
 use std::io::{self, Write};
 use std::fs::{self, OpenOptions};
-use std::path::PathBuf;
 use std::borrow::Cow;
 
-use futures::StreamExt;
 use reedline::{Reedline, Signal, FileBackedHistory, History};
 use reedline::{Prompt, PromptEditMode, PromptHistorySearch};
 use reedline::HistoryItem;
 
 mod app;
 use app::App;
-use jieyusha::messages::Message;
 use bash::BashTool;
-//use file_read_tool::FileReadTool;
 
 enum Mode {
 	Dialog,
 	Memory,
 	Slash,
 	Multiline,
-}
-
-fn agents_md_path() -> PathBuf {
-	App::root_path().join("AGENTS.md")
-}
-
-fn agents_dir_path() -> PathBuf {
-	App::root_path().join("agents")
 }
 
 fn read_line(_prompt: &str) -> io::Result<String> {
@@ -106,14 +94,14 @@ fn read_multiline_prefilled(initial: Option<String>) -> io::Result<String> {
 }
 
 fn append_to_agents(content: &str) -> io::Result<()> {
-	let path = agents_md_path();
+	let path = App::agents_md();
 	let mut file = OpenOptions::new().create(true).append(true).open(&path)?;
 	writeln!(file, "{}", content)?;
 	println!("Appended to {}", path.display());
 	Ok(())
 }
 
-fn handle_slash_command(cmd: &str) -> bool {
+fn handle_slash_command(app: &App, cmd: &str) -> bool {
 	let args = cmd.trim();
 	if args.is_empty() {
 		println!("Slash mode: enter a command (help to list).");
@@ -123,17 +111,17 @@ fn handle_slash_command(cmd: &str) -> bool {
 	match parts.next().unwrap_or("") {
 		"help" => {
 			println!("Built-in commands:");
-			println!("/help   - this help");
-			println!("/pin    - Pin the current conversation to a new agent file");
-			println!("/agents - Subagent commands: list, create <name>, delete <name>");
-			println!("/config - Show system configuration of Yushi CLI");
-			println!("/clear  - Clear the current session context history");
-			println!("/quit   - Exit TUI");
+			println!("/help    - this help");
+			println!("/pin     - Pin the current conversation to a new agent file");
+			println!("/agents  - Subagent commands: list, create <name>, delete <name>");
+			println!("/config  - Show system configuration of Yushi CLI");
+			println!("/clear   - Clear the history");
+			println!("/quit    - Exit TUI");
 		}
 		"pin" => {
 			match read_line("Agent name: ") {
 				Ok(name) if !name.trim().is_empty() => {
-					let dir = agents_dir_path();
+					let dir = App::agents_dir();
 					if let Err(e) = fs::create_dir_all(&dir) {
 						eprintln!("Failed to create agents dir {}: {}", dir.display(), e);
 					} else {
@@ -159,7 +147,7 @@ fn handle_slash_command(cmd: &str) -> bool {
 					let mut sp = line.split_whitespace();
 					match sp.next() {
 						Some("list") => {
-							let dir = agents_dir_path();
+							let dir = App::agents_dir();
 							match fs::read_dir(&dir) {
 								Ok(rd) => {
 									println!("Subagents in {}:", dir.display());
@@ -174,7 +162,7 @@ fn handle_slash_command(cmd: &str) -> bool {
 						}
 						Some("create") => {
 							if let Some(name) = sp.next() {
-								let dir = agents_dir_path();
+								let dir = App::agents_dir();
 								if let Err(e) = fs::create_dir_all(&dir) {
 									eprintln!("Failed to create agents dir: {}", e);
 								} else {
@@ -191,7 +179,7 @@ fn handle_slash_command(cmd: &str) -> bool {
 						}
 						Some("delete") => {
 							if let Some(name) = sp.next() {
-								let file = agents_dir_path().join(format!("{}.md", name));
+								let file = App::agents_dir().join(format!("{}.md", name));
 								match fs::remove_file(&file) {
 									Ok(_) => println!("Deleted {}", file.display()),
 									Err(_) => println!("Failed to delete {} (not found?).", file.display()),
@@ -213,8 +201,9 @@ fn handle_slash_command(cmd: &str) -> bool {
 			println!("Yushi CLI config:");
 			println!("- Runtime: tokio");
 			println!("- Install root: {}", repo_root.display());
-			println!("- AGENTS.md: {}", agents_md_path().display());
-			println!("- Agents dir: {}", agents_dir_path().display());
+			println!("- AGENTS.md: {}", App::agents_md().display());
+			println!("- Agents dir: {}", App::agents_dir().display());
+			println!("- History dir: {}", App::history_dir().display());
 		}
 		"clear" => {
 			// Clearing Reedline history
@@ -236,7 +225,8 @@ fn handle_slash_command(cmd: &str) -> bool {
 
 async fn run(app: &App) -> io::Result<()> {
     let mut mode = Mode::Dialog;
-    println!("Yushi CLI. Type / for commands, # to append memory, \\ for multiline. Ctrl+C to quit.");
+    println!("Yushi CLI - History: {}", App::history_dir().display());
+    println!("Type / for commands, # to append memory, \\ for multiline. Ctrl+C to quit.");
     loop {
         match mode {
             Mode::Dialog => {
@@ -247,7 +237,7 @@ async fn run(app: &App) -> io::Result<()> {
                         continue;
                     }
                     let cmd_inline = &line[1..];
-                    let should_exit = handle_slash_command(cmd_inline);
+                    let should_exit = handle_slash_command(app, cmd_inline);
                     if should_exit {
                         break;
                     }
@@ -280,7 +270,7 @@ async fn run(app: &App) -> io::Result<()> {
                         if !content.trim().is_empty() {
                             add_to_history(&content);
                             println!("❉ Working...");
-                            let response = app.chat(&content).await;
+                            let response = jieyusha::chat(&content, "main").await.unwrap_or_default();
                             print_formatted_response(&response);
                             add_to_history(&response);
                         } else {
@@ -306,23 +296,8 @@ async fn run(app: &App) -> io::Result<()> {
                     add_to_history(&line);
 
                     println!("❉ Thinking...");
-                    //let response = app.chat(&line).await;
-                    let mut stream = app.chat_stream(&line);
-                    while let Some(message) = stream.next().await {
-                        match message {
-                            Message::Assistant(msg) => {
-                                print_formatted_response(&msg.content);
-                            }
-                            Message::Progress(msg) => {
-                                show_progress_message(&msg);
-                            }
-                            _ => {}
-                        }
-                    }
-
-                    //print_formatted_response(&response);
-                    //add_to_history(&response);
-
+                    let response = jieyusha::chat(&line, "main").await.unwrap_or_default();
+                    print_formatted_response(&response);
                 }
             }
             Mode::Memory => {
@@ -340,7 +315,7 @@ async fn run(app: &App) -> io::Result<()> {
             Mode::Slash => {
                 let cmd = read_line("/ ")?;
                 // run command; if command signals exit, break
-                let should_exit = handle_slash_command(&cmd);
+                let should_exit = handle_slash_command(app, &cmd);
                 if should_exit {
                     break;
                 }
@@ -350,7 +325,7 @@ async fn run(app: &App) -> io::Result<()> {
                 let content = read_multiline_prefilled(None)?;
                 if !content.trim().is_empty() {
                     println!("• Working...");
-                    let response = app.chat(&content).await;
+                    let response = jieyusha::chat(&content, "main").await.unwrap_or_default();
                     print_formatted_response(&response);
                     add_to_history(&content);
                     add_to_history(&response);
@@ -368,6 +343,12 @@ async fn run(app: &App) -> io::Result<()> {
 // update main to use tokio runtime
 #[tokio::main]
 async fn main() {
+    // 确保 history 目录存在
+    let history_dir = App::history_dir();
+    if !history_dir.exists() {
+        fs::create_dir_all(&history_dir).expect("Failed to create history directory");
+    }
+    
     let mut app = App::new();
     app.trace("DEBUG");
 
@@ -412,7 +393,7 @@ fn print_formatted_response(response: &str) {
 }
 
 fn get_history() -> Option<FileBackedHistory> {
-	let path = App::root_path().join("history.txt");
+	let path = App::history_dir().join("cli.txt");
 	FileBackedHistory::with_file(1000, path).ok()
 }
 

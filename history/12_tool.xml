@@ -1,0 +1,74 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Memory xmlns:x="xdsl.xdef" x:extends="11_tool.xml">
+    <action id="call_00_9iIsnyACjM8VwxSM4CDKlDQh" name="Bash" type="tool-call">
+        <arguments>{&quot;cmd&quot;:&quot;ls -la /root/code/ai/openclaw/&quot;}</arguments>
+        <result is-summary="false" status="OK" output="total 2348
+drwxr-xr-x 22 root root    4096 Feb  6 09:47 .
+drwxr-xr-x 31 root root    4096 Mar  4 09:28 ..
+drwxr-xr-x  3 root root    4096 Feb  6 09:47 .agent
+drwxr-xr-x  3 root root    4096 Feb  6 09:47 .agents
+-rw-r--r--  1 root root    1250 Feb  6 09:47 .detect-secrets.cfg
+-rw-r--r--  1 root root     441 Feb  6 09:47 .dockerignore
+-rw-r--r--  1 root root     257 Feb  6 09:47 .env.example
+drwxr-xr-x  8 root root    4096 Feb  6 09:47 .git
+-rw-r--r--  1 root root      19 Feb  6 09:47 .gitattributes
+drwxr-xr-x  4 root root    4096 Feb  6 09:47 .github
+-rw-r--r--  1 root root    1329 Feb  6 09:47 .gitignore
+-rw-r--r--  1 root root     139 Feb  6 09:47 .npmrc
+-rw-r--r--  1 root root     379 Feb  6 09:47 .oxfmtrc.jsonc
+-rw-r--r--  1 root root     959 Feb  6 09:47 .oxlintrc.json
+drwxr-xr-x  5 root root    4096 Feb  6 09:47 .pi
+-rw-r--r--  1 root root    3193 Feb  6 09:47 .pre-commit-config.yaml
+-rw-r--r--  1 root root   71447 Feb  6 09:47 .secrets.baseline
+-rw-r--r--  1 root root     743 Feb  6 09:47 .shellcheckrc
+-rw-r--r--  1 root root    1054 Feb  6 09:47 .swiftformat
+-rw-r--r--  1 root root    2837 Feb  6 09:47 .swiftlint.yml
+drwxr-xr-x  2 root root    4096 Feb  6 09:47 .vscode
+-rw-r--r--  1 root root   18267 Feb  6 09:47 AGENTS.md
+-rw-r--r--  1 root root  144464 Feb  6 09:47 CHANGELOG.md
+lrwxrwxrwx  1 root root       9 Feb  6 09:47 CLAUDE.md -&gt; AGENTS.md
+-rw-r--r--  1 root root    2932 Feb  6 09:47 CONTRIBUTING.md
+-rw-r--r--  1 root root    1576 Feb  6 09:47 Dockerfile
+-rw-r--r--  1 root root     285 Feb  6 09:47 Dockerfile.sandbox
+-rw-r--r--  1 root root     570 Feb  6 09:47 Dockerfile.sandbox-browser
+-rw-r--r--  1 root root    1074 Feb  6 09:47 LICENSE
+-rw-r--r--  1 root root 1413716 Feb  6 09:47 README-header.png
+-rw-r--r--  1 root root   99338 Feb  6 09:47 README.md
+-rw-r--r--  1 root root    1994 Feb  6 09:47 SECURITY.md
+drwxr-xr-x  7 root root    4096 Feb  6 09:47 Swabble
+-rw-r--r--  1 root root   14699 Feb  6 09:47 appcast.xml
+drwxr-xr-x  6 root root    4096 Feb  6 09:47 apps
+drwxr-xr-x  3 root root    4096 Feb  6 09:47 assets
+-rw-r--r--  1 root root    1399 Feb  6 09:47 docker-compose.yml
+-rwxr-xr-x  1 root root    6037 Feb  6 09:47 docker-setup.sh
+drwxr-xr-x 27 root root    4096 Feb  6 09:47 docs
+-rw-r--r--  1 root root    5223 Feb  6 09:47 docs.acp.md
+drwxr-xr-x 33 root root    4096 Feb  6 09:47 extensions
+-rw-r--r--  1 root root    1166 Feb  6 09:47 fly.private.toml
+-rw-r--r--  1 root root     773 Feb  6 09:47 fly.toml
+drwxr-xr-x  2 root root    4096 Feb  6 09:47 git-hooks
+-rwxr-xr-x  1 root root     305 Feb  6 09:47 openclaw.mjs
+-rw-r--r--  1 root root    9852 Feb  6 09:47 package.json
+drwxr-xr-x  4 root root    4096 Feb  6 09:47 packages
+drwxr-xr-x  2 root root    4096 Feb  6 09:47 patches
+-rw-r--r--  1 root root  372161 Feb  6 09:47 pnpm-lock.yaml
+-rw-r--r--  1 root root     255 Feb  6 09:47 pnpm-workspace.yaml
+-rw-r--r--  1 root root     480 Feb  6 09:47 render.yaml
+drwxr-xr-x  8 root root    4096 Feb  6 09:47 scripts
+drwxr-xr-x 55 root root    4096 Feb  6 09:47 skills
+drwxr-xr-x 52 root root    4096 Feb  6 09:47 src
+drwxr-xr-x  5 root root    4096 Feb  6 09:47 test
+-rw-r--r--  1 root root     697 Feb  6 09:47 tsconfig.json
+-rw-r--r--  1 root root     558 Feb  6 09:47 tsdown.config.ts
+drwxr-xr-x  4 root root    4096 Feb  6 09:47 ui
+drwxr-xr-x  3 root root    4096 Feb  6 09:47 vendor
+-rw-r--r--  1 root root    3402 Feb  6 09:47 vitest.config.ts
+-rw-r--r--  1 root root     614 Feb  6 09:47 vitest.e2e.config.ts
+-rw-r--r--  1 root root     350 Feb  6 09:47 vitest.extensions.config.ts
+-rw-r--r--  1 root root     351 Feb  6 09:47 vitest.gateway.config.ts
+-rw-r--r--  1 root root     353 Feb  6 09:47 vitest.live.config.ts
+-rw-r--r--  1 root root     513 Feb  6 09:47 vitest.unit.config.ts
+-rw-r--r--  1 root root     524 Feb  6 09:47 zizmor.yml">
+        </result>
+    </action>
+</Memory>

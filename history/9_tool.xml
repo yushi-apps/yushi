@@ -1,0 +1,106 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Memory xmlns:x="xdsl.xdef" x:extends="8_tool.xml">
+    <action id="call_00_I5H2DM4xqW9F9nhFfXwhOhIn" name="Bash" type="tool-call">
+        <arguments>{&quot;cmd&quot;:&quot;cat /root/code/ai/openclaw/docs/start/getting-started.md | head -100&quot;}</arguments>
+        <result is-summary="false" status="OK" output="---
+summary: &quot;Get OpenClaw installed and run your first chat in minutes.&quot;
+read_when:
+  - First time setup from zero
+  - You want the fastest path to a working chat
+title: &quot;Getting Started&quot;
+---
+
+# Getting Started
+
+Goal: go from zero to a first working chat with minimal setup.
+
+&lt;Info&gt;
+Fastest chat: open the Control UI (no channel setup needed). Run `openclaw dashboard`
+and chat in the browser, or open `http://127.0.0.1:18789/` on the
+&lt;Tooltip headline=&quot;Gateway host&quot; tip=&quot;The machine running the OpenClaw gateway service.&quot;&gt;gateway host&lt;/Tooltip&gt;.
+Docs: [Dashboard](/web/dashboard) and [Control UI](/web/control-ui).
+&lt;/Info&gt;
+
+## Prereqs
+
+- Node 22 or newer
+
+&lt;Tip&gt;
+Check your Node version with `node --version` if you are unsure.
+&lt;/Tip&gt;
+
+## Quick setup (CLI)
+
+&lt;Steps&gt;
+  &lt;Step title=&quot;Install OpenClaw (recommended)&quot;&gt;
+    &lt;Tabs&gt;
+      &lt;Tab title=&quot;macOS/Linux&quot;&gt;
+        ```bash
+        curl -fsSL https://openclaw.ai/install.sh | bash
+        ```
+      &lt;/Tab&gt;
+      &lt;Tab title=&quot;Windows (PowerShell)&quot;&gt;
+        ```powershell
+        iwr -useb https://openclaw.ai/install.ps1 | iex
+        ```
+      &lt;/Tab&gt;
+    &lt;/Tabs&gt;
+
+    &lt;Note&gt;
+    Other install methods and requirements: [Install](/install).
+    &lt;/Note&gt;
+
+  &lt;/Step&gt;
+  &lt;Step title=&quot;Run the onboarding wizard&quot;&gt;
+    ```bash
+    openclaw onboard --install-daemon
+    ```
+
+    The wizard configures auth, gateway settings, and optional channels.
+    See [Onboarding Wizard](/start/wizard) for details.
+
+  &lt;/Step&gt;
+  &lt;Step title=&quot;Check the Gateway&quot;&gt;
+    If you installed the service, it should already be running:
+
+    ```bash
+    openclaw gateway status
+    ```
+
+  &lt;/Step&gt;
+  &lt;Step title=&quot;Open the Control UI&quot;&gt;
+    ```bash
+    openclaw dashboard
+    ```
+  &lt;/Step&gt;
+&lt;/Steps&gt;
+
+&lt;Check&gt;
+If the Control UI loads, your Gateway is ready for use.
+&lt;/Check&gt;
+
+## Optional checks and extras
+
+&lt;AccordionGroup&gt;
+  &lt;Accordion title=&quot;Run the Gateway in the foreground&quot;&gt;
+    Useful for quick tests or troubleshooting.
+
+    ```bash
+    openclaw gateway --port 18789
+    ```
+
+  &lt;/Accordion&gt;
+  &lt;Accordion title=&quot;Send a test message&quot;&gt;
+    Requires a configured channel.
+
+    ```bash
+    openclaw message send --target +15555550123 --message &quot;Hello from OpenClaw&quot;
+    ```
+
+  &lt;/Accordion&gt;
+&lt;/AccordionGroup&gt;
+
+## Go deeper">
+        </result>
+    </action>
+</Memory>

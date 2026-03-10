@@ -8,6 +8,8 @@ mod task_tool;
 mod skill;
 mod utils;
 mod error;
+pub mod memory;
+mod summarizer;
 
 pub use chat::{chat, chat_stream};
 pub use llm::ModelProfile;
@@ -20,6 +22,7 @@ use task_tool::TaskTool;
 use std::fmt;
 pub use skill::SkillTool;
 pub struct Registry {
+    root_path: String,
     system_prompt: RwLock<String>,
     agent_prompt: RwLock<String>,
     models: RwLock<HashMap<String, ModelProfile>>,
@@ -32,6 +35,7 @@ impl Registry {
         static INSTANCE: OnceLock<Arc<Registry>> = OnceLock::new();
         INSTANCE.get_or_init(|| {
             let registry = Arc::new(Registry {
+                root_path: "".to_string(),
                 system_prompt: RwLock::new(String::new()),
                 agent_prompt: RwLock::new(String::new()),
                 models: RwLock::new(HashMap::new()),
@@ -43,6 +47,10 @@ impl Registry {
             registry.register_tool(Arc::new(SkillTool));
             registry
         })
+    }
+
+    pub fn root_path(&self) -> &str {
+        &self.root_path
     }
 
     pub fn register_model(&self, profile: &ModelProfile) {

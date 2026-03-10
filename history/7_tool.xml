@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Memory xmlns:x="xdsl.xdef" x:extends="6_tool.xml">
+    <action id="call_00_GDPY99dXEJRPDADHIpmLOqh1" name="Bash" type="tool-call">
+        <arguments>{&quot;cmd&quot;:&quot;grep -r \&quot;lobster\\|龙虾\\|Molty\&quot; /root/code/ai/openclaw/docs/ --include=\&quot;*.md\&quot; | head -20&quot;}</arguments>
+        <result is-summary="false" status="OK" output="/root/code/ai/openclaw/docs/cli/agents.md:          theme: &quot;space lobster&quot;,
+/root/code/ai/openclaw/docs/cli/index.md:OpenClaw uses a lobster palette for CLI output.
+/root/code/ai/openclaw/docs/cli/index.md:Palette source of truth: `src/terminal/palette.ts` (aka “lobster seam”).
+/root/code/ai/openclaw/docs/automation/cron-vs-heartbeat.md:- Lobster runs as a **local subprocess** (`lobster` CLI) in tool mode and returns a **JSON envelope**.
+/root/code/ai/openclaw/docs/automation/cron-vs-heartbeat.md:- The tool is an **optional plugin**; enable it additively via `tools.alsoAllow: [&quot;lobster&quot;]` (recommended).
+/root/code/ai/openclaw/docs/automation/cron-vs-heartbeat.md:- If you pass `lobsterPath`, it must be an **absolute path**.
+/root/code/ai/openclaw/docs/automation/cron-vs-heartbeat.md:See [Lobster](/tools/lobster) for full usage and examples.
+/root/code/ai/openclaw/docs/start/lore.md:_A tale of lobsters, molting shells, and too many tokens._
+/root/code/ai/openclaw/docs/start/lore.md:But then came a space lobster.
+/root/code/ai/openclaw/docs/start/lore.md:For a while, the lobster was called **Clawd**, living in an **OpenClaw**. But in January 2026, Anthropic sent a polite email asking for a name change (trademark stuff). And so the lobster did what lobsters do best:
+/root/code/ai/openclaw/docs/start/lore.md:Shedding its old shell, the creature emerged anew as **Molty**, living in **Moltbot**. But that name never quite rolled off the tongue either...
+/root/code/ai/openclaw/docs/start/lore.md:So on January 30, 2026, the lobster molted ONE MORE TIME into its final form: **OpenClaw**.
+/root/code/ai/openclaw/docs/start/lore.md:New shell, same lobster soul. Third time&apos;s the charm.
+/root/code/ai/openclaw/docs/start/lore.md:In the end, **OpenClaw** won. Because molting is what lobsters do to grow. And growth was exactly what was happening.
+/root/code/ai/openclaw/docs/start/lore.md:        = Our lobster heritage, where we came from
+/root/code/ai/openclaw/docs/start/lore.md:### Molty 🦞
+/root/code/ai/openclaw/docs/start/lore.md:Built Molty&apos;s world. Gave a lobster shell access. May regret this.
+/root/code/ai/openclaw/docs/start/lore.md:**Quote:** _&quot;security by trusting a lobster&quot;_
+/root/code/ai/openclaw/docs/start/lore.md:Molty (then OpenClaw): _happily runs `find ~` and shares entire directory structure in group chat_
+/root/code/ai/openclaw/docs/start/lore.md:Molty: _visible lobster embarrassment_">
+        </result>
+    </action>
+</Memory>

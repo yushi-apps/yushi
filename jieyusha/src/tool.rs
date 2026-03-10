@@ -5,12 +5,19 @@ use async_trait::async_trait;
 use crate::messages::{Message, AssistantMessage, ToolMessage, ProgressMessage};
 
 pub struct ToolResult {
-    pub stream: Pin<Box<dyn Stream<Item = Message> + Send>>
+    pub stream: Pin<Box<dyn Stream<Item = Message> + Send>>,
+    /// 是否需要持久化结果到文件
+    pub requires_persistence: bool,
 }
 
 impl ToolResult {
     pub fn new(stream: Pin<Box<dyn Stream<Item = Message> + Send>>) -> Self {
-        Self { stream }
+        Self { stream, requires_persistence: false }
+    }
+
+    /// 创建需要持久化的结果
+    pub fn persistent(stream: Pin<Box<dyn Stream<Item = Message> + Send>>) -> Self {
+        Self { stream, requires_persistence: true }
     }
 
     pub fn error(error: impl Into<String>, tool_use_id: impl Into<String>) -> Self {

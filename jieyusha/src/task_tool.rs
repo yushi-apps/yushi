@@ -109,7 +109,7 @@ impl Tool for TaskTool {
         let task_prompt = agent::get_agent_prompt();
         let tool_use_contenxt = ToolUseContext {
             model: None,
-            tools: self.get_task_tools(agent_config.tools), 
+            tools: self.get_task_tools(agent_config.tools),
             agent_id: agent_id.clone(),
             abort_signal: false,
             tool_use_id: Uuid::new_v4().to_string(),

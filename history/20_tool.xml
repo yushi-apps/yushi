@@ -1,0 +1,207 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Memory xmlns:x="xdsl.xdef" x:extends="19_tool.xml">
+    <action id="call_00_Ru50ZLNrol6FBevQ9htb9GGN" name="Bash" type="tool-call">
+        <arguments>{&quot;cmd&quot;:&quot;head -200 /root/code/ai/openclaw/src/cli/update-cli.ts&quot;}</arguments>
+        <result is-summary="false" status="OK" output="import type { Command } from &quot;commander&quot;;
+import { confirm, isCancel, select, spinner } from &quot;@clack/prompts&quot;;
+import { spawnSync } from &quot;node:child_process&quot;;
+import fs from &quot;node:fs/promises&quot;;
+import os from &quot;node:os&quot;;
+import path from &quot;node:path&quot;;
+import {
+  checkShellCompletionStatus,
+  ensureCompletionCacheExists,
+} from &quot;../commands/doctor-completion.js&quot;;
+import {
+  formatUpdateAvailableHint,
+  formatUpdateOneLiner,
+  resolveUpdateAvailability,
+} from &quot;../commands/status.update.js&quot;;
+import { readConfigFileSnapshot, writeConfigFile } from &quot;../config/config.js&quot;;
+import { resolveOpenClawPackageRoot } from &quot;../infra/openclaw-root.js&quot;;
+import { trimLogTail } from &quot;../infra/restart-sentinel.js&quot;;
+import { parseSemver } from &quot;../infra/runtime-guard.js&quot;;
+import {
+  channelToNpmTag,
+  DEFAULT_GIT_CHANNEL,
+  DEFAULT_PACKAGE_CHANNEL,
+  formatUpdateChannelLabel,
+  normalizeUpdateChannel,
+  resolveEffectiveUpdateChannel,
+} from &quot;../infra/update-channels.js&quot;;
+import {
+  checkUpdateStatus,
+  compareSemverStrings,
+  fetchNpmTagVersion,
+  resolveNpmChannelTag,
+} from &quot;../infra/update-check.js&quot;;
+import {
+  detectGlobalInstallManagerByPresence,
+  detectGlobalInstallManagerForRoot,
+  cleanupGlobalRenameDirs,
+  globalInstallArgs,
+  resolveGlobalPackageRoot,
+  type GlobalInstallManager,
+} from &quot;../infra/update-global.js&quot;;
+import {
+  runGatewayUpdate,
+  type UpdateRunResult,
+  type UpdateStepInfo,
+  type UpdateStepResult,
+  type UpdateStepProgress,
+} from &quot;../infra/update-runner.js&quot;;
+import { syncPluginsForUpdateChannel, updateNpmInstalledPlugins } from &quot;../plugins/update.js&quot;;
+import { runCommandWithTimeout } from &quot;../process/exec.js&quot;;
+import { defaultRuntime } from &quot;../runtime.js&quot;;
+import { formatDocsLink } from &quot;../terminal/links.js&quot;;
+import { stylePromptHint, stylePromptMessage } from &quot;../terminal/prompt-style.js&quot;;
+import { renderTable } from &quot;../terminal/table.js&quot;;
+import { theme } from &quot;../terminal/theme.js&quot;;
+import { replaceCliName, resolveCliName } from &quot;./cli-name.js&quot;;
+import { formatCliCommand } from &quot;./command-format.js&quot;;
+import { installCompletion } from &quot;./completion-cli.js&quot;;
+import { formatHelpExamples } from &quot;./help-format.js&quot;;
+
+export type UpdateCommandOptions = {
+  json?: boolean;
+  restart?: boolean;
+  channel?: string;
+  tag?: string;
+  timeout?: string;
+  yes?: boolean;
+};
+export type UpdateStatusOptions = {
+  json?: boolean;
+  timeout?: string;
+};
+export type UpdateWizardOptions = {
+  timeout?: string;
+};
+
+const STEP_LABELS: Record&lt;string, string&gt; = {
+  &quot;clean check&quot;: &quot;Working directory is clean&quot;,
+  &quot;upstream check&quot;: &quot;Upstream branch exists&quot;,
+  &quot;git fetch&quot;: &quot;Fetching latest changes&quot;,
+  &quot;git rebase&quot;: &quot;Rebasing onto target commit&quot;,
+  &quot;git rev-parse @{upstream}&quot;: &quot;Resolving upstream commit&quot;,
+  &quot;git rev-list&quot;: &quot;Enumerating candidate commits&quot;,
+  &quot;git clone&quot;: &quot;Cloning git checkout&quot;,
+  &quot;preflight worktree&quot;: &quot;Preparing preflight worktree&quot;,
+  &quot;preflight cleanup&quot;: &quot;Cleaning preflight worktree&quot;,
+  &quot;deps install&quot;: &quot;Installing dependencies&quot;,
+  build: &quot;Building&quot;,
+  &quot;ui:build&quot;: &quot;Building UI&quot;,
+  &quot;openclaw doctor&quot;: &quot;Running doctor checks&quot;,
+  &quot;git rev-parse HEAD (after)&quot;: &quot;Verifying update&quot;,
+  &quot;global update&quot;: &quot;Updating via package manager&quot;,
+  &quot;global install&quot;: &quot;Installing global package&quot;,
+};
+
+const UPDATE_QUIPS = [
+  &quot;Leveled up! New skills unlocked. You&apos;re welcome.&quot;,
+  &quot;Fresh code, same lobster. Miss me?&quot;,
+  &quot;Back and better. Did you even notice I was gone?&quot;,
+  &quot;Update complete. I learned some new tricks while I was out.&quot;,
+  &quot;Upgraded! Now with 23% more sass.&quot;,
+  &quot;I&apos;ve evolved. Try to keep up.&quot;,
+  &quot;New version, who dis? Oh right, still me but shinier.&quot;,
+  &quot;Patched, polished, and ready to pinch. Let&apos;s go.&quot;,
+  &quot;The lobster has molted. Harder shell, sharper claws.&quot;,
+  &quot;Update done! Check the changelog or just trust me, it&apos;s good.&quot;,
+  &quot;Reborn from the boiling waters of npm. Stronger now.&quot;,
+  &quot;I went away and came back smarter. You should try it sometime.&quot;,
+  &quot;Update complete. The bugs feared me, so they left.&quot;,
+  &quot;New version installed. Old version sends its regards.&quot;,
+  &quot;Firmware fresh. Brain wrinkles: increased.&quot;,
+  &quot;I&apos;ve seen things you wouldn&apos;t believe. Anyway, I&apos;m updated.&quot;,
+  &quot;Back online. The changelog is long but our friendship is longer.&quot;,
+  &quot;Upgraded! Peter fixed stuff. Blame him if it breaks.&quot;,
+  &quot;Molting complete. Please don&apos;t look at my soft shell phase.&quot;,
+  &quot;Version bump! Same chaos energy, fewer crashes (probably).&quot;,
+];
+
+const MAX_LOG_CHARS = 8000;
+const DEFAULT_PACKAGE_NAME = &quot;openclaw&quot;;
+const CORE_PACKAGE_NAMES = new Set([DEFAULT_PACKAGE_NAME]);
+const CLI_NAME = resolveCliName();
+const OPENCLAW_REPO_URL = &quot;https://github.com/openclaw/openclaw.git&quot;;
+const DEFAULT_GIT_DIR = path.join(os.homedir(), &quot;.openclaw&quot;);
+
+function normalizeTag(value?: string | null): string | null {
+  if (!value) {
+    return null;
+  }
+  const trimmed = value.trim();
+  if (!trimmed) {
+    return null;
+  }
+  if (trimmed.startsWith(&quot;openclaw@&quot;)) {
+    return trimmed.slice(&quot;openclaw@&quot;.length);
+  }
+  if (trimmed.startsWith(`${DEFAULT_PACKAGE_NAME}@`)) {
+    return trimmed.slice(`${DEFAULT_PACKAGE_NAME}@`.length);
+  }
+  return trimmed;
+}
+
+function pickUpdateQuip(): string {
+  return UPDATE_QUIPS[Math.floor(Math.random() * UPDATE_QUIPS.length)] ?? &quot;Update complete.&quot;;
+}
+
+function normalizeVersionTag(tag: string): string | null {
+  const trimmed = tag.trim();
+  if (!trimmed) {
+    return null;
+  }
+  const cleaned = trimmed.startsWith(&quot;v&quot;) ? trimmed.slice(1) : trimmed;
+  return parseSemver(cleaned) ? cleaned : null;
+}
+
+async function readPackageVersion(root: string): Promise&lt;string | null&gt; {
+  try {
+    const raw = await fs.readFile(path.join(root, &quot;package.json&quot;), &quot;utf-8&quot;);
+    const parsed = JSON.parse(raw) as { version?: string };
+    return typeof parsed.version === &quot;string&quot; ? parsed.version : null;
+  } catch {
+    return null;
+  }
+}
+
+async function resolveTargetVersion(tag: string, timeoutMs?: number): Promise&lt;string | null&gt; {
+  const direct = normalizeVersionTag(tag);
+  if (direct) {
+    return direct;
+  }
+  const res = await fetchNpmTagVersion({ tag, timeoutMs });
+  return res.version ?? null;
+}
+
+async function isGitCheckout(root: string): Promise&lt;boolean&gt; {
+  try {
+    await fs.stat(path.join(root, &quot;.git&quot;));
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+async function readPackageName(root: string): Promise&lt;string | null&gt; {
+  try {
+    const raw = await fs.readFile(path.join(root, &quot;package.json&quot;), &quot;utf-8&quot;);
+    const parsed = JSON.parse(raw) as { name?: string };
+    const name = parsed?.name?.trim();
+    return name ? name : null;
+  } catch {
+    return null;
+  }
+}
+
+async function isCorePackage(root: string): Promise&lt;boolean&gt; {
+  const name = await readPackageName(root);
+  return Boolean(name &amp;&amp; CORE_PACKAGE_NAMES.has(name));
+}
+
+async function pathExists(targetPath: string): Promise&lt;boolean&gt; {">
+        </result>
+    </action>
+</Memory>

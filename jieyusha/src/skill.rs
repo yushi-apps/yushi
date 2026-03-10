@@ -1,5 +1,6 @@
 use async_trait::async_trait;
 use crate::tool::{Tool, ToolUseContext, ToolResult};
+use crate::memory::SkillDef;
 use std::path::Path;
 use std::fs;
 use crate::utils;
@@ -77,15 +78,14 @@ impl Tool for SkillTool {
 }
 
 impl SkillTool {
-    pub fn load_skills(skill_dir: &str) -> String {
-        let skills_dir = Path::new(skill_dir);
-        if !skills_dir.exists() {
-            return "<skills></skills>".to_string();
+    pub fn load_skills(skill_dir: &Path) -> String {
+        if !skill_dir.exists() {
+            return String::new();
         }
 
         let mut skills_xml = String::from("<skills>\n");
 
-        if let Ok(entries) = fs::read_dir(skills_dir) {
+        if let Ok(entries) = fs::read_dir(skill_dir) {
             for entry in entries.flatten() {
                 if let Ok(file_type) = entry.file_type() {
                     if file_type.is_dir() {

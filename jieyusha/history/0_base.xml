@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Memory id="fab9a524-64a1-4873-8e78-9deab756c272" version="1" created-at="2026-03-10T08:36:18Z" status="PENDING">
+    <workspace />
+    <tools>
+        <tool name="Skill" description="加载技能获取专业知识" />
+        <tool name="Task" description="Launch a new task" />
+    </tools>
+    <current />
+</Memory>

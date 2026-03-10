@@ -1,0 +1,9 @@
+赏析/root/work/yushi/test.txt
+赏析/root/work/yushi/text.txt
+阅读/root/code/orc/yushi/history目录下的文件，深度思考你可以使用这种文件格式提升哪些能力？
+赏析/root/work/yushi/text.txt
+赏析/root/work/yushi/test.txt
+安装使用openclaw，为什么叫养龙虾？
+深入理解，详细说明OpenClaw是怎么做到自主进化的？
+通过1和2的方式给我答案
+搜索OpenClaw的相关文档，分析代码实现来深刻理解，详细说明OpenClaw是怎么做到自主进化的

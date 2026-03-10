@@ -1,0 +1,57 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Memory xmlns:x="xdsl.xdef" x:extends="5_tool.xml">
+    <action id="call_00_t9mx4Qyf9mfqe1AzdhtAEKYc" name="Bash" type="tool-call">
+        <arguments>{&quot;cmd&quot;:&quot;head -50 /root/code/ai/openclaw/AGENTS.md&quot;}</arguments>
+        <result is-summary="false" status="OK" output="# Repository Guidelines
+
+- Repo: https://github.com/openclaw/openclaw
+- GitHub issues/comments/PR comments: use literal multiline strings or `-F - &lt;&lt;&apos;EOF&apos;` (or $&apos;...&apos;) for real newlines; never embed &quot;\\n&quot;.
+
+## Project Structure &amp; Module Organization
+
+- Source code: `src/` (CLI wiring in `src/cli`, commands in `src/commands`, web provider in `src/provider-web.ts`, infra in `src/infra`, media pipeline in `src/media`).
+- Tests: colocated `*.test.ts`.
+- Docs: `docs/` (images, queue, Pi config). Built output lives in `dist/`.
+- Plugins/extensions: live under `extensions/*` (workspace packages). Keep plugin-only deps in the extension `package.json`; do not add them to the root `package.json` unless core uses them.
+- Plugins: install runs `npm install --omit=dev` in plugin dir; runtime deps must live in `dependencies`. Avoid `workspace:*` in `dependencies` (npm install breaks); put `openclaw` in `devDependencies` or `peerDependencies` instead (runtime resolves `openclaw/plugin-sdk` via jiti alias).
+- Installers served from `https://openclaw.ai/*`: live in the sibling repo `../openclaw.ai` (`public/install.sh`, `public/install-cli.sh`, `public/install.ps1`).
+- Messaging channels: always consider **all** built-in + extension channels when refactoring shared logic (routing, allowlists, pairing, command gating, onboarding, docs).
+  - Core channel docs: `docs/channels/`
+  - Core channel code: `src/telegram`, `src/discord`, `src/slack`, `src/signal`, `src/imessage`, `src/web` (WhatsApp web), `src/channels`, `src/routing`
+  - Extensions (channel plugins): `extensions/*` (e.g. `extensions/msteams`, `extensions/matrix`, `extensions/zalo`, `extensions/zalouser`, `extensions/voice-call`)
+- When adding channels/extensions/apps/docs, review `.github/labeler.yml` for label coverage.
+
+## Docs Linking (Mintlify)
+
+- Docs are hosted on Mintlify (docs.openclaw.ai).
+- Internal doc links in `docs/**/*.md`: root-relative, no `.md`/`.mdx` (example: `[Config](/configuration)`).
+- Section cross-references: use anchors on root-relative paths (example: `[Hooks](/configuration#hooks)`).
+- Doc headings and anchors: avoid em dashes and apostrophes in headings because they break Mintlify anchor links.
+- When Peter asks for links, reply with full `https://docs.openclaw.ai/...` URLs (not root-relative).
+- When you touch docs, end the reply with the `https://docs.openclaw.ai/...` URLs you referenced.
+- README (GitHub): keep absolute docs URLs (`https://docs.openclaw.ai/...`) so links work on GitHub.
+- Docs content must be generic: no personal device names/hostnames/paths; use placeholders like `user@gateway-host` and “gateway host”.
+
+## Docs i18n (zh-CN)
+
+- `docs/zh-CN/**` is generated; do not edit unless the user explicitly asks.
+- Pipeline: update English docs → adjust glossary (`docs/.i18n/glossary.zh-CN.json`) → run `scripts/docs-i18n` → apply targeted fixes only if instructed.
+- Translation memory: `docs/.i18n/zh-CN.tm.jsonl` (generated).
+- See `docs/.i18n/README.md`.
+- The pipeline can be slow/inefficient; if it’s dragging, ping @jospalmbier on Discord instead of hacking around it.
+
+## exe.dev VM ops (general)
+
+- Access: stable path is `ssh exe.dev` then `ssh vm-name` (assume SSH key already set).
+- SSH flaky: use exe.dev web terminal or Shelley (web agent); keep a tmux session for long ops.
+- Update: `sudo npm i -g openclaw@latest` (global install needs root on `/usr/lib/node_modules`).
+- Config: use `openclaw config set ...`; ensure `gateway.mode=local` is set.
+- Discord: store raw token only (no `DISCORD_BOT_TOKEN=` prefix).
+- Restart: stop old gateway and run:
+  `pkill -9 -f openclaw-gateway || true; nohup openclaw gateway run --bind loopback --port 18789 --force &gt; /tmp/openclaw-gateway.log 2&gt;&amp;1 &amp;`
+- Verify: `openclaw channels status --probe`, `ss -ltnp | rg 18789`, `tail -n 120 /tmp/openclaw-gateway.log`.
+
+## Build, Test, and Development Commands">
+        </result>
+    </action>
+</Memory>

@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Memory xmlns:x="xdsl.xdef" x:extends="24_tool.xml">
+    <action id="call_00_ZSfrlGQ5pwuhWg0u6fL6RGh3" name="Bash" type="tool-call">
+        <arguments>{&quot;cmd&quot;:&quot;find /root/code/ai/openclaw/src -name \&quot;*session*\&quot; -type f | head -20&quot;}</arguments>
+        <result is-summary="false" status="OK" output="/root/code/ai/openclaw/src/cli/program/register.status-health-sessions.ts
+/root/code/ai/openclaw/src/memory/sync-session-files.ts
+/root/code/ai/openclaw/src/memory/session-files.ts
+/root/code/ai/openclaw/src/channels/session.ts
+/root/code/ai/openclaw/src/web/session.ts
+/root/code/ai/openclaw/src/web/session.test.ts
+/root/code/ai/openclaw/src/web/auto-reply/session-snapshot.test.ts
+/root/code/ai/openclaw/src/web/auto-reply/session-snapshot.ts
+/root/code/ai/openclaw/src/acp/session-mapper.ts
+/root/code/ai/openclaw/src/acp/session.ts
+/root/code/ai/openclaw/src/acp/session-mapper.test.ts
+/root/code/ai/openclaw/src/acp/session.test.ts
+/root/code/ai/openclaw/src/routing/session-key.ts
+/root/code/ai/openclaw/src/cron/isolated-agent/session.ts
+/root/code/ai/openclaw/src/config/sessions.ts
+/root/code/ai/openclaw/src/config/zod-schema.session.ts
+/root/code/ai/openclaw/src/config/sessions/main-session.ts
+/root/code/ai/openclaw/src/config/sessions/session-key.ts
+/root/code/ai/openclaw/src/config/sessions.cache.test.ts
+/root/code/ai/openclaw/src/config/sessions.test.ts">
+        </result>
+    </action>
+</Memory>

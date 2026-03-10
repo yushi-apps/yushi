@@ -1,0 +1,57 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Memory xmlns:x="xdsl.xdef" x:extends="9_tool.xml">
+    <action id="call_00_UElIv0NdOZjoRnDA7rIiB7ll" name="Bash" type="tool-call">
+        <arguments>{&quot;cmd&quot;:&quot;cat /root/code/ai/openclaw/package.json | head -50&quot;}</arguments>
+        <result is-summary="false" status="OK" output="{
+  &quot;name&quot;: &quot;openclaw&quot;,
+  &quot;version&quot;: &quot;2026.2.4&quot;,
+  &quot;description&quot;: &quot;WhatsApp gateway CLI (Baileys web) with Pi RPC agent&quot;,
+  &quot;keywords&quot;: [],
+  &quot;license&quot;: &quot;MIT&quot;,
+  &quot;author&quot;: &quot;&quot;,
+  &quot;bin&quot;: {
+    &quot;openclaw&quot;: &quot;openclaw.mjs&quot;
+  },
+  &quot;files&quot;: [
+    &quot;assets/&quot;,
+    &quot;CHANGELOG.md&quot;,
+    &quot;dist/&quot;,
+    &quot;docs/&quot;,
+    &quot;extensions/&quot;,
+    &quot;LICENSE&quot;,
+    &quot;openclaw.mjs&quot;,
+    &quot;README-header.png&quot;,
+    &quot;README.md&quot;,
+    &quot;skills/&quot;
+  ],
+  &quot;type&quot;: &quot;module&quot;,
+  &quot;main&quot;: &quot;dist/index.js&quot;,
+  &quot;exports&quot;: {
+    &quot;.&quot;: &quot;./dist/index.js&quot;,
+    &quot;./plugin-sdk&quot;: &quot;./dist/plugin-sdk/index.js&quot;,
+    &quot;./cli-entry&quot;: &quot;./openclaw.mjs&quot;
+  },
+  &quot;scripts&quot;: {
+    &quot;android:assemble&quot;: &quot;cd apps/android &amp;&amp; ./gradlew :app:assembleDebug&quot;,
+    &quot;android:install&quot;: &quot;cd apps/android &amp;&amp; ./gradlew :app:installDebug&quot;,
+    &quot;android:run&quot;: &quot;cd apps/android &amp;&amp; ./gradlew :app:installDebug &amp;&amp; adb shell am start -n ai.openclaw.android/.MainActivity&quot;,
+    &quot;android:test&quot;: &quot;cd apps/android &amp;&amp; ./gradlew :app:testDebugUnitTest&quot;,
+    &quot;build&quot;: &quot;pnpm canvas:a2ui:bundle &amp;&amp; tsdown &amp;&amp; node --import tsx scripts/canvas-a2ui-copy.ts &amp;&amp; node --import tsx scripts/copy-hook-metadata.ts &amp;&amp; node --import tsx scripts/write-build-info.ts &amp;&amp; node --import tsx scripts/write-cli-compat.ts&quot;,
+    &quot;canvas:a2ui:bundle&quot;: &quot;bash scripts/bundle-a2ui.sh&quot;,
+    &quot;check&quot;: &quot;pnpm tsgo &amp;&amp; pnpm lint &amp;&amp; pnpm format&quot;,
+    &quot;check:loc&quot;: &quot;node --import tsx scripts/check-ts-max-loc.ts --max 500&quot;,
+    &quot;dev&quot;: &quot;node scripts/run-node.mjs&quot;,
+    &quot;docs:bin&quot;: &quot;node scripts/build-docs-list.mjs&quot;,
+    &quot;docs:build&quot;: &quot;cd docs &amp;&amp; pnpm dlx --reporter append-only mint broken-links&quot;,
+    &quot;docs:dev&quot;: &quot;cd docs &amp;&amp; mint dev&quot;,
+    &quot;docs:list&quot;: &quot;node scripts/docs-list.js&quot;,
+    &quot;format&quot;: &quot;oxfmt --check&quot;,
+    &quot;format:all&quot;: &quot;pnpm format &amp;&amp; pnpm format:swift&quot;,
+    &quot;format:fix&quot;: &quot;oxfmt --write&quot;,
+    &quot;format:swift&quot;: &quot;swiftformat --lint --config .swiftformat apps/macos/Sources apps/ios/Sources apps/shared/OpenClawKit/Sources&quot;,
+    &quot;gateway:dev&quot;: &quot;OPENCLAW_SKIP_CHANNELS=1 CLAWDBOT_SKIP_CHANNELS=1 node scripts/run-node.mjs --dev gateway&quot;,
+    &quot;gateway:dev:reset&quot;: &quot;OPENCLAW_SKIP_CHANNELS=1 CLAWDBOT_SKIP_CHANNELS=1 node scripts/run-node.mjs --dev gateway --reset&quot;,
+    &quot;gateway:watch&quot;: &quot;node scripts/watch-node.mjs gateway --force&quot;,">
+        </result>
+    </action>
+</Memory>

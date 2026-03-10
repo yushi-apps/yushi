@@ -9,6 +9,7 @@ use crate::messages::*;
 use crate::llm::{LlmApiType, LlmProvider, ChatCompletionsProvider};
 use crate::error::{JieyushaError, Result};
 use crate::tool::{Tool, ToolUseContext};
+use crate::memory::Memory;
 
 #[instrument(level="info", skip_all)]
 async fn query_llm(
@@ -120,6 +121,10 @@ pub fn query<'a>(
                             tool_message.tool_use_id,
                             tool_message.content
                         );
+
+                        if let Err(e) = Memory::tool_action(tool_use, tool_message) {
+                            log::error!("Failed to save tool action: {}", e);
+                        }
                         collected_tool_messages.push(Message::Tool(tool_message.clone()));
                     }
                 }

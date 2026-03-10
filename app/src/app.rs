@@ -1,27 +1,25 @@
 use std::env;
-use std::sync::Arc;
-use std::fs::File;
+use std::fs;
 use std::path::PathBuf;
-use uuid::Uuid;
-use jieyusha::{Tool, Registry, ModelProfile, chat_stream, SkillTool};
+use std::sync::Arc;
+use jieyusha::{Tool, Registry, ModelProfile, SkillTool};
 use jieyusha::messages::Message;
+use jieyusha::memory::Memory;
 
 pub struct App {
-    name: String
+    name: String,
 }
 
 impl Default for App {
     fn default() -> Self {
         let mut app = App {
-            name: "DaYuHai".to_string()
+            name: "DaYuHai".to_string(),
         };
 
-        let root = App::root_path();
+        let root = Self::root_path();
 
-        let mut skills = "".to_string();
-        if let Some(skills_dir) = root.join("skills").to_str() {
-            skills = SkillTool::load_skills(skills_dir);
-        }
+        let skills_dir = root.join("skills");
+        let skills = SkillTool::load_skills(&skills_dir);
 
         let app_prompt_path = root.join("YUSHI.md");
         if let Ok(prompt) = std::fs::read_to_string(app_prompt_path) {
@@ -39,17 +37,16 @@ impl Default for App {
         let model_path = root.join("config/model.toml");
         if let Ok(profile) = std::fs::read_to_string(model_path) {
             app.add_model(&profile);
-        } 
+        }
 
-        //if let Some(profile) = app.load_model_profile(&model_path) {
-        //    Registry::instance().register_model(&profile);
-        //};
         if let Some(agents_dir) = root.join("agents").to_str() {
             let path = PathBuf::from(agents_dir);
             if path.exists() && path.is_dir() {
                 Registry::instance().load_all_agents(agents_dir).expect("Failed to load agents");
             }
         }
+
+        Memory::init_base().unwrap();
 
         app
     }
@@ -75,56 +72,27 @@ impl App {
             PathBuf::from(manifest_dir).parent().unwrap().to_path_buf()
         }
     }
-
+    
+    /// 获取 AGENTS.md 文件路径
+    pub fn agents_md() -> PathBuf {
+        Self::root_path().join("AGENTS.md")
+    }
+    
+    /// 获取 agents 目录路径
+    pub fn agents_dir() -> PathBuf {
+        Self::root_path().join("agents")
+    }
+    
+    /// 获取 History 目录路径
+    pub fn history_dir() -> PathBuf {
+        Self::root_path().join("history")
+    }
+    
     pub fn add_tools(&mut self, tool: impl Tool + 'static) -> &mut Self{
         Registry::instance().register_tool(Arc::new(tool));
         self
     }
-
-    //#[actix_web::main] 
-    //pub async fn run(&self) -> std::io::Result<()> {
-    //    #[cfg(feature = "model-smallthinker")]
-    //    {
-    //        std::process::Command::new("smallthinker")
-    //            .args([
-    //                "-m", "/usr/share/yushi/model.gguf",
-    //                "-c", "2048",
-    //                "--host", "127.0.0.1",
-    //                "--port", "22789",
-    //                "-t", "4",
-    //                "--jinja",
-    //                "--chat-template", "chatml",
-    //                "--repeat-penalty", "1.1",
-    //                "--offline",
-    //            ])
-    //            .spawn()
-    //            .expect("Failed to start smallthinker server.");
-    //    }
-
-    //    log::info!("Model Configuration: {:?}", Registry::instance().get_model_profile("main"));
-
-    //    HttpServer::new(|| {
-    //        ActixApp::new()
-    //            .service(services::chat)
-    //    })
-    //    .bind("0.0.0.0:22786")?
-    //    .run()
-    //    .await
-    //}
-
-    pub async fn chat(&self, input: &str) -> String {
-        let id = Uuid::new_v4().to_string();
-        match jieyusha::chat(input, &id).await {
-            Ok(output) => output,
-            Err(err) => format!("Error: {}", err),
-        }
-    }
-
-    pub fn chat_stream(&self, input: &str) -> impl futures::Stream<Item = Message> {
-        let id = Uuid::new_v4().to_string();
-        chat_stream(input, id)
-    }
-
+    
     pub fn trace(&mut self, level: &str) -> &mut Self {
         let tracing_level = match level {
             "ERROR" => tracing::Level::ERROR,
@@ -135,7 +103,7 @@ impl App {
             _ => tracing::Level::ERROR,
         };
         
-        let file = File::create(self.name.clone() + ".log").expect("Failed to create log file");
+        let file = fs::File::create(self.name.clone() + ".log").expect("Failed to create log file");
         tracing_subscriber::fmt()
             .with_max_level(tracing_level) 
             .with_target(false)      
@@ -154,13 +122,11 @@ impl App {
 
     pub fn add_prompt(&mut self, prompt: impl Into<String>) -> &mut Self {
         Registry::instance().register_system_prompt(prompt.into());
-
         self 
     }
 
     pub fn add_agent_prompt(&mut self, prompt: impl Into<String>) -> &mut Self {
         Registry::instance().register_agent_prompt(prompt.into());
-
         self 
     }
 
@@ -198,4 +164,3 @@ impl App {
         self
     }
 }
-

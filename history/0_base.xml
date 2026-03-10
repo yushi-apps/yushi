@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Memory id="29c5ae20-b22f-4c40-826f-4dc2411bdd93" version="1" created-at="2026-03-10T08:00:01Z" status="PENDING">
+    <workspace />
+    <tools>
+        <tool name="Skill" description="加载技能获取专业知识" />
+        <tool name="Task" description="Launch a new task" />
+    </tools>
+    <skills>
+  <skill>
+    <name>weather</name>
+    <description>Get current weather and forecasts (no API key required).</description>
+  </skill>
+</skills>
+    <current />
+    <history />
+</Memory>

@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Memory xmlns:x="xdsl.xdef" x:extends="4_tool.xml">
+    <action id="call_00_osA7tJ7Q8Kr63RPId0JWCJuA" name="Bash" type="tool-call">
+        <arguments>{&quot;cmd&quot;:&quot;grep -i \&quot;lobster\\|龙虾\\|养龙虾\&quot; /root/code/ai/openclaw/README.md -A 2 -B 2&quot;}</arguments>
+        <result is-summary="false" status="OK" output="## Molty
+
+OpenClaw was built for **Molty**, a space lobster AI assistant. 🦞
+by Peter Steinberger and the community.
+
+--
+Special thanks to [Mario Zechner](https://mariozechner.at/) for his support and for
+[pi-mono](https://github.com/badlogic/pi-mono).
+Special thanks to Adam Doppelt for lobster.bot.
+
+Thanks to all clawtributors:">
+        </result>
+    </action>
+</Memory>

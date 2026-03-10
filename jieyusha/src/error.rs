@@ -11,6 +11,8 @@ pub enum JieyushaError {
     ToolError(String),
     #[error("IO error: {0}")]
     IoError(#[from] std::io::Error),
+    #[error("Parse error: {0}")]
+    ParseError(String),
     #[error("Serialization error: {0}")]
     SerializationError(#[from] serde_json::Error),
 }

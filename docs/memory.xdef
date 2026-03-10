@@ -1,0 +1,55 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+
+<!-- 
+  Memory - Agent 的记忆结构定义
+  
+  Memory 是 Agent 执行过程中的完整记忆，包含：
+  - 意图：用户的目标
+  - 工作空间：已创建的文件信息
+  - 工具和技能：可用的能力
+  - 当前快照：最近10个 action（用于 LLM 上下文）
+  - 历史：所有 action 记录
+-->
+
+<Memory xdef:name="Memory" x:schema="xdef.xdef"
+         xmlns:x="xdsl.xdef" xmlns:xdef="xdef.xdef"
+         id="!string" version="string" created-at="!long" status="enum::SUCCESS, PENDING, FAILED">
+
+    <!-- 用户意图 -->
+    <intent xdef:value="!string" />
+    
+    <!-- 系统提示（可选） -->
+    <system-prompt xdef:value="string" />
+
+    <!-- 工作空间：记录工作目录相关文件信息（仅提供信息给LLM，不执行IO） -->
+    <workspace xdef:body-type="list" xdef:key-attr="name">
+        <file name="!string" description="string" />
+    </workspace>
+
+    <!-- 可用工具 -->
+    <tools xdef:body-type="list" xdef:key-attr="name">
+        <tool name="!string" description="string" input-schema="json" />
+    </tools>
+
+    <!-- 可用技能 -->
+    <skills xdef:body-type="list" xdef:key-attr="name">
+        <skill name="!string" description="string" />
+    </skills>
+
+    <!-- 当前快照：最近10个 action（用于 LLM 上下文窗口） -->
+    <current xdef:body-type="list" xdef:key-attr="id">
+        <action id="!string" xdef:ref="Action"/>
+    </current>
+
+    <!-- 历史记录：所有 action 记录 -->
+    <action id="!string" xdef:ref="Action"/>
+
+    <!-- Action 定义 -->
+    <xdef:define xdef:name="Action" id="!string" name="!string" type="!enum::thought, tool-call, tool-result, system-message">
+        <arguments xdef:value="json" />
+        <result is-summary="boolean" status="enum::OK, ERROR" output="string" error="string">
+            <raw-content xdef:value="string" />
+        </result>
+    </xdef:define>
+
+</Memory>
