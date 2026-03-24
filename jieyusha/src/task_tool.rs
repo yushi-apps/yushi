@@ -113,6 +113,7 @@ impl Tool for TaskTool {
             agent_id: agent_id.clone(),
             abort_signal: false,
             tool_use_id: Uuid::new_v4().to_string(),
+            root_path: None,
         };
 
         let stream = async_stream::stream! {

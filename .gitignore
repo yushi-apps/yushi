@@ -1,4 +1,5 @@
 /target
+/history
+/.qoder
 DaYuHai.log
-history.txt
 config/model.toml

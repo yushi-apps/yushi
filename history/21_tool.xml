@@ -1,9 +1,0 @@
-<?xml version="1.0" encoding="UTF-8"?>
-<Memory xmlns:x="xdsl.xdef" x:extends="20_tool.xml">
-    <action id="call_00_GG9R1I1afQJeE4oA2dGW0qyZ" name="Bash" type="tool-call">
-        <arguments>{&quot;cmd&quot;:&quot;find /root/code/ai/openclaw/docs -name \&quot;*.md\&quot; -type f | xargs grep -l \&quot;evolution\\|self.*improve\\|autonomous\&quot; | head -10&quot;}</arguments>
-        <result is-summary="false" status="OK" output="/root/code/ai/openclaw/docs/experiments/research/memory.md
-/root/code/ai/openclaw/docs/help/faq.md">
-        </result>
-    </action>
-</Memory>

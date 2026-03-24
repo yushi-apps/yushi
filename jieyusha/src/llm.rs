@@ -28,7 +28,6 @@ impl LlmApiType {
 #[async_trait]
 pub trait LlmProvider {
     async fn request(req: UnifiedRequest) -> Result<AssistantMessage>;
-    fn as_any(&self) -> &dyn std::any::Any;
 }
 
 pub struct ChatCompletionsProvider;
@@ -88,8 +87,8 @@ impl LlmProvider for ChatCompletionsProvider {
                 Message::Tool(tool_message) => {
                     total_messages.push(serde_json::json!({
                         "role": "tool",
-                        "content": serde_json::Value::String(tool_message.content),
                         "tool_call_id": tool_message.tool_use_id,
+                        "content": tool_message.content,
                     }));
                 },
                 Message::Progress(_) => {}
@@ -141,26 +140,107 @@ impl LlmProvider for ChatCompletionsProvider {
         });
 
         log::debug!("LLM Request Body: {:?}\n", request_body);
+        
+        // 脱敏 API Key 显示
+        let masked_api_key = if req.model.api_key.len() > 8 {
+            format!("{}****{}", &req.model.api_key[..4], &req.model.api_key[req.model.api_key.len()-4..])
+        } else {
+            "****".to_string()
+        };
+        
+        log::info!(
+            "LLM Request: POST {} (model: {}, api_key: {})",
+            req.model.base_url,
+            req.model.model_name,
+            masked_api_key
+        );
+        
+        let request_start = std::time::Instant::now();
         let request = reqwest::Client::new()
-            .post(req.model.base_url)
+            .post(req.model.base_url.clone())
             .header("Content-Type", "application/json")
             .header("Authorization", format!("Bearer {}", req.model.api_key))
             .json(&request_body);
 
-
-        log::debug!("LLM Request: {:?}", request);
-        let response = request.send().await?;
+        let response = match request.send().await {
+            Ok(resp) => {
+                log::debug!("LLM Response: HTTP {} in {:.2}s", resp.status(), request_start.elapsed().as_secs_f64());
+                resp
+            },
+            Err(e) => {
+                let error_type = classify_reqwest_error(&e);
+                log::error!(
+                    "LLM Request Failed: POST {}\n  Error Type: {}\n  Error Detail: {}\n  Duration: {:.2}s",
+                    req.model.base_url,
+                    error_type,
+                    e,
+                    request_start.elapsed().as_secs_f64()
+                );
+                return Err(JieyushaError::NetworkError(e));
+            }
+        };
 
         if !response.status().is_success() {
-            return Err(JieyushaError::LlmError(format!("HTTP status: {}", response.status())));
+            let status = response.status();
+            let error_body = response.text().await.unwrap_or_else(|_| "<unable to read body>".to_string());
+            log::error!(
+                "LLM Response Error: HTTP {}\n  Response Body: {}",
+                status,
+                error_body
+            );
+            return Err(JieyushaError::LlmError(format!("HTTP status: {}", status)));
         }
 
-        //log::debug!("LLM Response Raw: {:?}", response);
-
-        let bytes = response.bytes().await?;
+        // 获取 Content-Length 用于诊断
+        let content_length = response.headers()
+            .get(reqwest::header::CONTENT_LENGTH)
+            .and_then(|v| v.to_str().ok())
+            .and_then(|v| v.parse::<usize>().ok());
+        
+        let read_start = std::time::Instant::now();
+        let bytes = match response.bytes().await {
+            Ok(b) => {
+                log::debug!(
+                    "LLM Response Body: {} bytes received in {:.2}s (expected: {})",
+                    b.len(),
+                    read_start.elapsed().as_secs_f64(),
+                    content_length.map(|l| l.to_string()).unwrap_or_else(|| "unknown".to_string())
+                );
+                b
+            },
+            Err(e) => {
+                let error_type = classify_reqwest_error(&e);
+                log::error!(
+                    "LLM Response Read Failed:\n  Error Type: {}\n  Error Detail: {}\n  Expected Size: {}\n  Duration: {:.2}s",
+                    error_type,
+                    e,
+                    content_length.map(|l| l.to_string()).unwrap_or_else(|| "unknown".to_string()),
+                    read_start.elapsed().as_secs_f64()
+                );
+                return Err(JieyushaError::NetworkError(e));
+            }
+        };
+        
         log::debug!("LLM Response Raw: {:?}", String::from_utf8_lossy(&bytes));
 
-        let llm_response: ChatCompletionResponse = serde_json::from_slice(&bytes)?;
+        let llm_response: ChatCompletionResponse = match serde_json::from_slice(&bytes) {
+            Ok(resp) => resp,
+            Err(e) => {
+                // 截断显示原始响应，避免日志过大
+                let raw_preview = String::from_utf8_lossy(&bytes);
+                let preview = if raw_preview.len() > 500 {
+                    format!("{}... (truncated, total {} bytes)", &raw_preview[..500], bytes.len())
+                } else {
+                    raw_preview.to_string()
+                };
+                log::error!(
+                    "LLM Response Decode Failed:\n  Parse Error: {}\n  Response Preview: {}",
+                    e,
+                    preview
+                );
+                return Err(JieyushaError::SerializationError(e));
+            }
+        };
         let chat_message = match llm_response
             .choices
             .into_iter()
@@ -193,10 +273,6 @@ impl LlmProvider for ChatCompletionsProvider {
             tool_uses: tool_uses,
             //duration_ms: 0,
         })
-    }
-
-    fn as_any(&self) -> &dyn std::any::Any {
-        self
     }
 }
 
@@ -322,4 +398,28 @@ pub struct TopLogprobs {
     pub bytes: Option<Vec<u8>>,
 }
 
- 
+/// 分类 reqwest 错误类型，用于日志诊断
+fn classify_reqwest_error(error: &reqwest::Error) -> &'static str {
+    if error.is_timeout() {
+        if error.is_connect() {
+            "CONNECTION_TIMEOUT"
+        } else {
+            "REQUEST_TIMEOUT"
+        }
+    } else if error.is_connect() {
+        "CONNECTION_FAILED"
+    } else if error.is_request() {
+        "REQUEST_ERROR"
+    } else if error.is_body() {
+        "BODY_ERROR"
+    } else if error.is_decode() {
+        "DECODE_ERROR"
+    } else if error.is_redirect() {
+        "REDIRECT_ERROR"
+    } else if error.is_status() {
+        "HTTP_STATUS_ERROR"
+    } else {
+        "UNKNOWN_ERROR"
+    }
+}
+

@@ -1,9 +1,0 @@
-<?xml version="1.0" encoding="UTF-8"?>
-<Memory xmlns:x="xdsl.xdef" x:extends="25_tool.xml">
-    <action id="call_00_SHUlFz3ETj2NI0ZCAQ0UCbQr" name="Bash" type="tool-call">
-        <arguments>{&quot;cmd&quot;:&quot;find /root/code/ai/openclaw/docs -name \&quot;architecture*\&quot; -type f | head -5&quot;}</arguments>
-        <result is-summary="false" status="OK" output="/root/code/ai/openclaw/docs/concepts/architecture.md
-/root/code/ai/openclaw/docs/zh-CN/concepts/architecture.md">
-        </result>
-    </action>
-</Memory>

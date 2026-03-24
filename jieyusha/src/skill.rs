@@ -1,6 +1,5 @@
 use async_trait::async_trait;
 use crate::tool::{Tool, ToolUseContext, ToolResult};
-use crate::memory::SkillDef;
 use std::path::Path;
 use std::fs;
 use crate::utils;
@@ -77,13 +76,22 @@ impl Tool for SkillTool {
     }
 }
 
+/// XML 转义
+fn escape_xml(s: &str) -> String {
+    s.replace("&", "&amp;")
+        .replace("<", "&lt;")
+        .replace(">", "&gt;")
+        .replace("\"", "&quot;")
+        .replace("'", "&apos;")
+}
+
 impl SkillTool {
     pub fn load_skills(skill_dir: &Path) -> String {
         if !skill_dir.exists() {
             return String::new();
         }
 
-        let mut skills_xml = String::from("<skills>\n");
+        let mut skills_xml = String::from("<available-skills>\n");
 
         if let Ok(entries) = fs::read_dir(skill_dir) {
             for entry in entries.flatten() {
@@ -99,8 +107,8 @@ impl SkillTool {
                                         metadata.get("description").map(|s| s.as_str()),
                                     ) {
                                         skills_xml.push_str(&format!(
-                                            "  <skill>\n    <name>{}</name>\n    <description>{}</description>\n  </skill>\n",
-                                            name, description
+                                            "    <skill name=\"{}\" description=\"{}\" />\n",
+                                            escape_xml(name), escape_xml(description)
                                         ));
                                     }
                                 }
@@ -111,7 +119,7 @@ impl SkillTool {
             }
         }
 
-        skills_xml.push_str("</skills>");
+        skills_xml.push_str("</available-skills>");
         log::info!("Loaded skills: {}", skills_xml);
         skills_xml
     }

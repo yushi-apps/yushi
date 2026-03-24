@@ -1,8 +1,0 @@
-<?xml version="1.0" encoding="UTF-8"?>
-<Memory xmlns:x="xdsl.xdef" x:extends="23_tool.xml">
-    <action id="call_00_anH9IViox6srNWGJY4XLTt6Q" name="Bash" type="tool-call">
-        <arguments>{&quot;cmd&quot;:&quot;head -200 /root/code/ai/openclaw/src/agents/sessions-spawn.ts&quot;}</arguments>
-        <result is-summary="false" status="OK" output="head: cannot open &apos;/root/code/ai/openclaw/src/agents/sessions-spawn.ts&apos; for reading: No such file or directory">
-        </result>
-    </action>
-</Memory>

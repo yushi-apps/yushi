@@ -3,8 +3,7 @@ use std::fs;
 use std::path::PathBuf;
 use std::sync::Arc;
 use jieyusha::{Tool, Registry, ModelProfile, SkillTool};
-use jieyusha::messages::Message;
-use jieyusha::memory::Memory;
+use jieyusha::memory;
 
 pub struct App {
     name: String,
@@ -17,6 +16,9 @@ impl Default for App {
         };
 
         let root = Self::root_path();
+        
+        // 设置 Registry 的 root_path
+        Registry::instance().set_root_path(root.to_string_lossy().to_string());
 
         let skills_dir = root.join("skills");
         let skills = SkillTool::load_skills(&skills_dir);
@@ -46,7 +48,10 @@ impl Default for App {
             }
         }
 
-        Memory::init_base().unwrap();
+        // 初始化 memory 系统
+        if let Err(e) = memory::init(&root) {
+            log::error!("Failed to init memory: {}", e);
+        }
 
         app
     }

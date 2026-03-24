@@ -1,8 +1,0 @@
-<?xml version="1.0" encoding="UTF-8"?>
-<Memory xmlns:x="xdsl.xdef" x:extends="15_tool.xml">
-    <action id="call_00_hi3clyn8iQk0Ng5MIgCdwNXG" name="Bash" type="tool-call">
-        <arguments>{&quot;cmd&quot;:&quot;find /root/code/ai/openclaw/src -name \&quot;*.ts\&quot; -type f | xargs grep -l \&quot;self.*improve\\|auto.*evolve\\|evolution\&quot; | head -20&quot;}</arguments>
-        <result is-summary="false" status="OK" output="">
-        </result>
-    </action>
-</Memory>

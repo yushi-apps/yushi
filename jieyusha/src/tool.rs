@@ -1,5 +1,6 @@
 use std::sync::Arc;
 use std::pin::Pin;
+use std::path::PathBuf;
 use futures::Stream;
 use async_trait::async_trait;
 use crate::messages::{Message, AssistantMessage, ToolMessage, ProgressMessage};
@@ -52,6 +53,7 @@ pub struct ToolUseContext {
     pub agent_id: String,  // name-uuid
     pub abort_signal: bool, // Todo use proper abort signal
     pub tool_use_id: String,
+    pub root_path: Option<PathBuf>,
 }
 
 #[async_trait]

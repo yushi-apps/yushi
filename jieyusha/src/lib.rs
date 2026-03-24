@@ -9,7 +9,6 @@ mod skill;
 mod utils;
 mod error;
 pub mod memory;
-mod summarizer;
 
 pub use chat::{chat, chat_stream};
 pub use llm::ModelProfile;
@@ -22,7 +21,7 @@ use task_tool::TaskTool;
 use std::fmt;
 pub use skill::SkillTool;
 pub struct Registry {
-    root_path: String,
+    root_path: RwLock<String>,
     system_prompt: RwLock<String>,
     agent_prompt: RwLock<String>,
     models: RwLock<HashMap<String, ModelProfile>>,
@@ -35,7 +34,7 @@ impl Registry {
         static INSTANCE: OnceLock<Arc<Registry>> = OnceLock::new();
         INSTANCE.get_or_init(|| {
             let registry = Arc::new(Registry {
-                root_path: "".to_string(),
+                root_path: RwLock::new(String::new()),
                 system_prompt: RwLock::new(String::new()),
                 agent_prompt: RwLock::new(String::new()),
                 models: RwLock::new(HashMap::new()),
@@ -49,8 +48,13 @@ impl Registry {
         })
     }
 
-    pub fn root_path(&self) -> &str {
-        &self.root_path
+    pub fn root_path(&self) -> String {
+        self.root_path.read().unwrap().clone()
+    }
+
+    pub fn set_root_path(&self, path: String) {
+        let mut root = self.root_path.write().unwrap();
+        *root = path;
     }
 
     pub fn register_model(&self, profile: &ModelProfile) {
