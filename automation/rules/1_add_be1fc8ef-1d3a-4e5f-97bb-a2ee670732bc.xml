@@ -1,0 +1,5 @@
+<Rules xmlns:x="/nop/schema/xdsl.xdef" x:extends="0_base.xml">
+    <rule id="be1fc8ef-1d3a-4e5f-97bb-a2ee670732bc" name="广州高温监控" description="每隔1分钟查询广州天气，温度超过28℃时提示" source-id="clock" match="all" message="检查广州天气温度" timeout-seconds="300">
+        <condition field="cron" op="cron-match" value="*/1 * * * *" />
+    </rule>
+</Rules>

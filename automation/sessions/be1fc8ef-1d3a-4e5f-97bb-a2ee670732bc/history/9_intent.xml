@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Memory xmlns:x="xdsl.xdef" x:extends="8_thought.xml">
+    <user-intent>bash /tmp/check_guangzhou_weather.sh
+
+## 触发上下文
+时钟触发时间: 2026-03-27T06:20:00.002334084+00:00</user-intent>
+</Memory>

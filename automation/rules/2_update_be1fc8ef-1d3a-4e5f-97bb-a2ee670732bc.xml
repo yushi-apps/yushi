@@ -1,0 +1,4 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Rules xmlns:x="/nop/schema/xdsl.xdef" x:extends="1_add_be1fc8ef-1d3a-4e5f-97bb-a2ee670732bc.xml">
+    <rule id="be1fc8ef-1d3a-4e5f-97bb-a2ee670732bc" x:override="merge" message="bash /tmp/check_guangzhou_weather.sh" delivery-channel="stdout" />
+</Rules>

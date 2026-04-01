@@ -75,6 +75,65 @@ fn get_latest_file(history_dir: &Path) -> Option<String> {
     files.last().map(|(_, name)| name.clone())
 }
 
+/// 从 toolcall XML 内容中提取 id 属性值
+fn extract_toolcall_id(content: &str) -> Option<String> {
+    // 查找 id="..." 模式
+    let id_pattern = "id=\"";
+    if let Some(start_idx) = content.find(id_pattern) {
+        let value_start = start_idx + id_pattern.len();
+        if let Some(end_idx) = content[value_start..].find('"') {
+            return Some(content[value_start..value_start + end_idx].to_string());
+        }
+    }
+    None
+}
+
+/// 在 history 中查找最近一个同工具名且 status="failed" 的 toolcall，返回其 id
+///
+/// 只在同一"重试链"中检测：如果在失败的 toolcall 之后有成功的同名 toolcall 或新的 thought，
+/// 则不复用（重试链已断开）
+fn find_failed_toolcall_id(history_dir: &Path, tool_name: &str) -> Option<String> {
+    let files = scan_history_files(history_dir);
+    
+    // 从后往前扫描，查找最近的同工具名 failed toolcall
+    let mut found_failed_id: Option<String> = None;
+    
+    for (_, filename) in files.iter().rev() {
+        if filename.contains("_toolcall") {
+            let path = history_dir.join(filename);
+            let content = match fs::read_to_string(&path) {
+                Ok(c) => c,
+                Err(_) => continue,
+            };
+            
+            // 检查是否是同工具名的 toolcall
+            let name_pattern = format!("name=\"{}\"", tool_name);
+            if content.contains(&name_pattern) {
+                // 检查状态
+                if content.contains("status=\"failed\"") {
+                    // 找到失败的同名 toolcall，提取 id
+                    if let Some(id) = extract_toolcall_id(&content) {
+                        found_failed_id = Some(id);
+                        break;
+                    }
+                } else if content.contains("status=\"success\"") {
+                    // 存在成功的同名 toolcall，重试链已断开
+                    return None;
+                }
+            }
+        } else if filename.contains("_thought") {
+            // 遇到 thought，检查是否有 found_failed_id
+            // 如果已找到 failed id，说明 failed toolcall 在此 thought 之后，可以复用
+            // 如果还没找到，继续往前找
+            if found_failed_id.is_some() {
+                break;
+            }
+        }
+    }
+    
+    found_failed_id
+}
+
 // ============================================================================
 // Memory 差量文件生成
 // ============================================================================
@@ -319,6 +378,9 @@ pub fn create_thought_delta(root_path: &Path, content: &str) -> Result<PathBuf> 
 /// 生成 toolcall 差量文件
 ///
 /// 保存工具调用和结果（一个文件包含完整的 toolcall）
+/// 
+/// id 属性语义：同一目的的重试调用共享相同的 id，以便在 merge 时自动覆盖。
+/// 如果检测到同工具名的 failed toolcall，则复用其 id；否则使用新的序号。
 pub fn create_toolcall_delta(root_path: &Path, tool_use: &ToolUse, tool_message: &ToolMessage) -> Result<PathBuf> {
     let history_dir = root_path.join("history");
     fs::create_dir_all(&history_dir)?;
@@ -326,6 +388,10 @@ pub fn create_toolcall_delta(root_path: &Path, tool_use: &ToolUse, tool_message:
     let next_num = get_next_number(&history_dir);
     let extends_file = get_latest_file(&history_dir)
         .unwrap_or_else(|| "0_workspace.xml".to_string());
+    
+    // 检查是否有可覆盖的失败 toolcall（同工具名）
+    let toolcall_id = find_failed_toolcall_id(&history_dir, &tool_use.name)
+        .unwrap_or_else(|| next_num.to_string());
     
     let mut xml = String::new();
     xml.push_str(r#"<?xml version="1.0" encoding="UTF-8"?>
@@ -341,7 +407,7 @@ pub fn create_toolcall_delta(root_path: &Path, tool_use: &ToolUse, tool_message:
         xml.push_str(&format!(
             r#"    <toolcall id="{}" tool-call-id="{}" name="{}" arguments="{}" status="failed" error="{}" />
 "#,
-            next_num,
+            toolcall_id,
             escape_xml(&tool_use.id),
             escape_xml(&tool_use.name),
             escape_xml(&tool_use.arguments),
@@ -351,7 +417,7 @@ pub fn create_toolcall_delta(root_path: &Path, tool_use: &ToolUse, tool_message:
         xml.push_str(&format!(
             r#"    <toolcall id="{}" tool-call-id="{}" name="{}" arguments="{}" status="success" result="{}" />
 "#,
-            next_num,
+            toolcall_id,
             escape_xml(&tool_use.id),
             escape_xml(&tool_use.name),
             escape_xml(&tool_use.arguments),
@@ -1094,5 +1160,115 @@ mod tests {
         assert!(content.contains("tool-call-id=\"call-002\""));
         assert!(content.contains("status=\"failed\""));
         assert!(content.contains("error=\""));
+    }
+    
+    #[test]
+    fn test_toolcall_retry_reuses_id() {
+        let temp_dir = TempDir::new().unwrap();
+        let root_path = temp_dir.path();
+        
+        fs::write(root_path.join("YUSHI.md"), "test").unwrap();
+        init(root_path).unwrap();
+        
+        // 第一次调用 Bash 工具，失败
+        let tool_use_1 = ToolUse {
+            id: "call-001".to_string(),
+            name: "Bash".to_string(),
+            arguments: r#"{"cmd": "cat missing.txt"}"#.to_string(),
+        };
+        let mut tool_message_1 = ToolMessage::new_content("文件不存在", "call-001");
+        tool_message_1.is_error = true;
+        create_toolcall_delta(root_path, &tool_use_1, &tool_message_1).unwrap();
+        
+        // 检查第一个 toolcall 的 id
+        let history_dir = root_path.join("history");
+        let content_1 = fs::read_to_string(history_dir.join("1_toolcall.xml")).unwrap();
+        assert!(content_1.contains("id=\"1\""));
+        assert!(content_1.contains("status=\"failed\""));
+        
+        // 第二次调用同一工具（重试），成功
+        let tool_use_2 = ToolUse {
+            id: "call-002".to_string(),
+            name: "Bash".to_string(),
+            arguments: r#"{"cmd": "cat existing.txt"}"#.to_string(),
+        };
+        let tool_message_2 = ToolMessage::new_content("file content", "call-002");
+        create_toolcall_delta(root_path, &tool_use_2, &tool_message_2).unwrap();
+        
+        // 检查第二个 toolcall 复用了第一个的 id
+        let content_2 = fs::read_to_string(history_dir.join("2_toolcall.xml")).unwrap();
+        assert!(content_2.contains("id=\"1\""));  // 复用 id
+        assert!(content_2.contains("status=\"success\""));
+    }
+    
+    #[test]
+    fn test_toolcall_no_retry_new_id() {
+        let temp_dir = TempDir::new().unwrap();
+        let root_path = temp_dir.path();
+        
+        fs::write(root_path.join("YUSHI.md"), "test").unwrap();
+        init(root_path).unwrap();
+        
+        // 第一次调用 Bash 工具，成功
+        let tool_use_1 = ToolUse {
+            id: "call-001".to_string(),
+            name: "Bash".to_string(),
+            arguments: r#"{"cmd": "ls"}"#.to_string(),
+        };
+        let tool_message_1 = ToolMessage::new_content("file1\nfile2", "call-001");
+        create_toolcall_delta(root_path, &tool_use_1, &tool_message_1).unwrap();
+        
+        // 第二次调用同一工具（新的调用，不是重试）
+        let tool_use_2 = ToolUse {
+            id: "call-002".to_string(),
+            name: "Bash".to_string(),
+            arguments: r#"{"cmd": "pwd"}"#.to_string(),
+        };
+        let tool_message_2 = ToolMessage::new_content("/home/user", "call-002");
+        create_toolcall_delta(root_path, &tool_use_2, &tool_message_2).unwrap();
+        
+        // 检查第二个 toolcall 使用新的 id（因为第一个是成功的）
+        let history_dir = root_path.join("history");
+        let content_1 = fs::read_to_string(history_dir.join("1_toolcall.xml")).unwrap();
+        let content_2 = fs::read_to_string(history_dir.join("2_toolcall.xml")).unwrap();
+        
+        assert!(content_1.contains("id=\"1\""));
+        assert!(content_2.contains("id=\"2\""));  // 新 id
+    }
+    
+    #[test]
+    fn test_toolcall_different_tool_no_reuse() {
+        let temp_dir = TempDir::new().unwrap();
+        let root_path = temp_dir.path();
+        
+        fs::write(root_path.join("YUSHI.md"), "test").unwrap();
+        init(root_path).unwrap();
+        
+        // 第一次调用 Bash 工具，失败
+        let tool_use_1 = ToolUse {
+            id: "call-001".to_string(),
+            name: "Bash".to_string(),
+            arguments: r#"{"cmd": "cat missing.txt"}"#.to_string(),
+        };
+        let mut tool_message_1 = ToolMessage::new_content("文件不存在", "call-001");
+        tool_message_1.is_error = true;
+        create_toolcall_delta(root_path, &tool_use_1, &tool_message_1).unwrap();
+        
+        // 第二次调用不同的工具 FileRead
+        let tool_use_2 = ToolUse {
+            id: "call-002".to_string(),
+            name: "FileRead".to_string(),
+            arguments: r#"{"path": "test.txt"}"#.to_string(),
+        };
+        let tool_message_2 = ToolMessage::new_content("content", "call-002");
+        create_toolcall_delta(root_path, &tool_use_2, &tool_message_2).unwrap();
+        
+        // 检查第二个 toolcall 使用新的 id（因为工具名不同）
+        let history_dir = root_path.join("history");
+        let content_1 = fs::read_to_string(history_dir.join("1_toolcall.xml")).unwrap();
+        let content_2 = fs::read_to_string(history_dir.join("2_toolcall.xml")).unwrap();
+        
+        assert!(content_1.contains("id=\"1\""));
+        assert!(content_2.contains("id=\"2\""));  // 新 id，因为不是同一工具
     }
 }

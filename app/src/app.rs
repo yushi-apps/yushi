@@ -23,7 +23,7 @@ impl Default for App {
         let skills_dir = root.join("skills");
         let skills = SkillTool::load_skills(&skills_dir);
 
-        let app_prompt_path = root.join("YUSHI.md");
+        let app_prompt_path = root.join("AGENTS.md");
         if let Ok(prompt) = std::fs::read_to_string(app_prompt_path) {
             let prompt = format!("{}\n{}", prompt, skills);
             app.add_prompt(&prompt);

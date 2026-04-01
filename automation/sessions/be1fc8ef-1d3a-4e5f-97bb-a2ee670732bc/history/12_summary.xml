@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Memory xmlns:x="xdsl.xdef" x:extends="0_workspace.xml">
+    <current-progress>
+    <todolist>
+        <todo id="1" content="检查广州天气" status="done" />
+    </todolist>
+    <available-files>
+        <file name="/tmp/check_guangzhou_weather.sh" description="用于获取广州天气的脚本" />
+    </available-files>
+    <rule>
+        广州当前温度: +28°C
+    </rule>
+    <next-n-steps>
+        <step id="1" description="任务完成" />
+    </next-n-steps>
+</current-progress>
+</Memory>

@@ -91,11 +91,20 @@ impl YNode {
         self.tag_name == CoreConstants::TEXT_TAG_NAME 
     }
 
+    /// 从文件路径解析 XML
     pub fn from_xml(path: &str) -> Result<YNode, YError> {
         let file = File::open(path)?;
         let file = BufReader::new(file);
-        let parser = EventReader::new(file);
-        
+        Self::parse_xml(EventReader::new(file))
+    }
+
+    /// 从字符串解析 XML
+    pub fn from_str(xml: &str) -> Result<YNode, YError> {
+        Self::parse_xml(EventReader::from_str(xml))
+    }
+
+    /// 解析 XML 的核心逻辑
+    fn parse_xml<R: std::io::Read>(parser: EventReader<R>) -> Result<YNode, YError> {
         let mut stack: Vec<YNode> = Vec::new();
         let mut root: Option<YNode> = None;
         
@@ -301,5 +310,69 @@ mod tests{
         assert_eq!(node.attributes.get("crlf"), Some(&ValueWithLocation::new(YValue::String("string".to_string()), None)));
 
         std::fs::remove_file("./device.xml").unwrap();
+    }
+
+    #[test]
+    fn test_from_str() {
+        // 测试从字符串解析 XML
+        let xml = r#"<?xml version="1.0" encoding="UTF-8"?>
+<task source-session="test" created-at-ms="123">
+    <step tool="Bash">
+        <arguments>{"command":"echo hello"}</arguments>
+    </step>
+</task>"#;
+
+        let root = YNode::from_str(xml).unwrap();
+        assert_eq!(root.tag_name, "task");
+        assert_eq!(root.attributes.len(), 2);
+        assert_eq!(root.attributes.get("source-session"), Some(&ValueWithLocation::new(YValue::String("test".to_string()), None)));
+        
+        // 检查 step 子节点
+        assert_eq!(root.children.len(), 1);
+        let step = &root.children[0];
+        assert_eq!(step.tag_name, "step");
+        assert_eq!(step.attributes.get("tool"), Some(&ValueWithLocation::new(YValue::String("Bash".to_string()), None)));
+        
+        // 检查 arguments 子节点
+        assert_eq!(step.children.len(), 1);
+        let args = &step.children[0];
+        assert_eq!(args.tag_name, "arguments");
+        // 验证文本内容
+        assert!(args.has_child());
+        if let Some(child) = args.children.first() {
+            if let Some(content) = child.content_str() {
+                assert!(content.contains("echo hello"));
+            }
+        }
+    }
+
+    #[test]
+    fn test_self_closing_tags() {
+        // 测试自闭合标签解析
+        let xml = r#"<?xml version="1.0" encoding="UTF-8"?>
+<Memory id="test">
+    <toolcall id="3" name="Skill" arguments="{&quot;name&quot;: &quot;weather&quot;}" status="success" />
+    <toolcall id="5" name="Bash" arguments="{&quot;cmd&quot;: &quot;curl&quot;}" status="failed" />
+</Memory>"#;
+
+        let root = YNode::from_str(xml).unwrap();
+        assert_eq!(root.tag_name, "Memory");
+        
+        // 应该有 2 个 toolcall 子节点（自闭合标签）
+        assert_eq!(root.children.len(), 2);
+        
+        // 检查第一个 toolcall
+        let tc1 = &root.children[0];
+        assert_eq!(tc1.tag_name, "toolcall");
+        assert_eq!(tc1.attr("name").map(|v| v.value.to_string()).unwrap_or_default(), "Skill");
+        assert_eq!(tc1.attr("status").map(|v| v.value.to_string()).unwrap_or_default(), "success");
+        // XML 实体应该被自动解码
+        let args = tc1.attr("arguments").map(|v| v.value.to_string()).unwrap_or_default();
+        assert!(args.contains("weather"), "arguments should contain 'weather', got: {}", args);
+        
+        // 检查第二个 toolcall
+        let tc2 = &root.children[1];
+        assert_eq!(tc2.tag_name, "toolcall");
+        assert_eq!(tc2.attr("status").map(|v| v.value.to_string()).unwrap_or_default(), "failed");
     }
 }

@@ -1,0 +1,3 @@
+<EventSources xmlns:x="/nop/schema/xdsl.xdef">
+    <source id="clock" name="系统时钟" type="internal" />
+</EventSources>

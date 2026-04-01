@@ -1,0 +1,75 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<!--
+支持异步执行的轻量化任务引擎。持久化状态为可选特性，如果在步骤上配置了saveState，则可以从任意步骤中断并恢复执行。
+-->
+<task version="long=0" record-metrics="boolean=true" name="string"
+      graph-mode="boolean=false" enter-steps="string" exit-steps="string">
+
+    <xdef:define xdef:name="TaskBaseStep" name="string" description="string" allow-failure="boolean=false"
+        timeout="long=0" save-state="boolean" 
+        next="string" next-on-error="string">
+
+        <input name="string" description="string" type="string">
+            <source xdef:value="expression"/>
+        </input>
+
+        <output name="string" description="string" type="string">
+            <source xdef:value="expression"/>
+        </output>
+
+        <when xdef:value="expression"/>
+        <retry max-retry-count="int=0" retry-delay="int=0" max-retry-delay="int=0"
+            exponential-delay="boolean=true" >
+            <exception-filter xdef:value="expression"/>"
+        </retry>
+    </xdef:define>
+
+    <xdef:define xdef:name="TaskSteps" xdef:ref="TaskBaseStep">
+        <steps>
+            <!--依次执行子步骤，一般情况下以最后一个步骤的返回值作为整体的返回值-->
+            <sequence name="string" xdef:ref="TaskSteps" />
+            <!-- 并行执行所有子步骤 -->
+            <parallel name="string" xdef:ref="TaskSteps" join-type="string" auto-cancel="boolean=true">
+                <aggregator xdef:value="expression" />
+            <parallel>
+            <!-- 类似于Behavior Tree中的Selector机制，依次尝试每个步骤，遇到第一个具有非空返回值的步骤则返回，否则继续执行下一个 -->
+            <selector xdef:ref="TaskSteps" />
+            <!--图模式步骤-->
+            <graph name="string" enter-steps="string" exit-steps="string" xdef:ref="TaskSteps" />
+
+            <if name="string" xdef:ref="TaskBaseStep">
+                <condition xdef:value="expression" />
+                <then xdef:ref="TaskSteps" />
+                <else xdef:ref="TaskSteps" />
+            </if>
+            <loop name="string" xdef:ref="TaskSteps" index-name="string" var-name="string" items="expression" max-count="int=0" >
+                <while xdef:value="expression" />
+                <until xdef:value="expression" />
+            </loop>
+            <loop-n name="string" xdef:ref="TaskSteps" var-name="string" index-name="string"
+                begin="expression" end="expression" step="expression">
+            </loop-n>
+
+            <script name="string" lang="python" xdef:ref="TaskBaseStep">
+                <source xdef:value="string" />
+            </script>
+            <call-task name="string" xdef:ref="TaskBaseStep" task-name="string" task-version="long" />
+            <call-tool name="string" tool="string" xdef:ref="TaskBaseStep" />
+
+            <suspend name="string" xdef:ref="TaskBaseStep">
+                <resume-when xdef:value="expression" />
+            </suspend>
+            <delay name="string" xdef:ref="TaskBaseStep" millis="expression" />
+            <sleep name="string" xdef:ref="TaskBaseStep" millis="expression" />
+            <!--退出sequence或loop-->
+            <exit name="string" xdef:ref="TaskBaseStep" />
+                <source xdef:value="expression" />
+            </exit>
+            <!--结束整个任务-->
+            <end name="string" xdef:ref="TaskBaseStep" />
+                <source xdef:value="expression" />
+            </end> 
+        <steps>
+    </xdef:define>
+</task>

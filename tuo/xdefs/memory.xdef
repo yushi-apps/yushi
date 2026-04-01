@@ -1,0 +1,42 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<Memory id="string" created-at="!long">
+
+    <system-prompt xdef:value="string" />
+
+    <available-skills>
+        <skill name="string" description="string" />
+    </available-skills>
+
+    <available-tools>
+        <tool name="string" description="string" input-schema="json" />
+    </available-tools>
+
+    <available-agents>
+        <agent name="string" description="string" />
+    </available-agents>
+
+    <user-intent xdef:value="string" />
+
+    <current-progress>
+        <todolist>
+            <todo id="int"  content="string" status="enum::done, ongoing, waiting" />
+        </todolist>
+
+        <available-files>
+            <file name="string" description="string" />
+        </available-files>
+
+        <rule />
+
+        <next-n-steps>
+            <step id="int" description="string" />
+        </next-n-steps>
+    </current-progress>
+    
+    <!-- 三种 Action 类型直接作为 Memory 的顶级元素，通过 x:extends 链式继承逐步累积 -->
+    <thought id="int" content="string" />
+    <toolcall id="int" name="string" arguments="json" status="enum::success, failed" result="string" error="string" />
+    <summary id="int" begin_action="int" end_action="int" content="string" />
+
+</Memory>

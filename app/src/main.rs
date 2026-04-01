@@ -1,6 +1,7 @@
 use std::io::{self, Write};
 use std::fs::{self, OpenOptions};
 use std::borrow::Cow;
+use std::sync::Arc;
 
 use reedline::{Reedline, Signal, FileBackedHistory, History};
 use reedline::{Prompt, PromptEditMode, PromptHistorySearch};
@@ -9,6 +10,11 @@ use reedline::HistoryItem;
 mod app;
 use app::App;
 use bash::BashTool;
+
+use automation::executor::Executor;
+use automation::engine::{RuleCommand, RuleEngine};
+use automation::tool::RuleTool;
+use automation::storage::Storage;
 
 enum Mode {
 	Dialog,
@@ -352,10 +358,38 @@ async fn main() {
     let mut app = App::new();
     app.trace("DEBUG");
 
+    // ==== Automation 初始化 ====
+    // 1. 获取 automation 根目录
+    let root = App::root_path();
+    let automation_dir = root.join("automation");
+
+    // 2. 创建 Storage 并初始化
+    let storage = Arc::new(Storage::new(automation_dir.clone()));
+    storage.ensure_dirs().expect("Failed to create automation dirs");
+    storage.init_base_files().expect("Failed to init base files");
+
+    // 3. 创建 Executor
+    let executor = Arc::new(Executor::new(automation_dir.clone()));
+
+    // 4. 加载已有规则和事件源
+    let rules = storage.load_merged_rules().unwrap_or_default();
+    let sources = storage.load_merged_sources().unwrap_or_default();
+
+    // 5. 启动 RuleEngine
+    let (cmd_tx, _event_tx, engine_handle) = RuleEngine::start(executor.clone(), rules, sources);
+
+    // 6. 注册 RuleTool (clone cmd_tx，因为关机时还需要使用)
+    let shutdown_tx = cmd_tx.clone();
+    app.add_tools(RuleTool::new(cmd_tx, storage));
+
     app.add_tools(BashTool);
     if let Err(e) = run(&app).await {
         eprintln!("Error: {}", e);
     }
+
+    // 优雅关闭 RuleEngine
+    let _ = shutdown_tx.send(RuleCommand::Shutdown).await;
+    let _ = engine_handle.await;
 }
 
 struct CustomPrompt;

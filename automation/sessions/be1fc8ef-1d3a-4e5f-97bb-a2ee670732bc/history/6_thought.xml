@@ -1,0 +1,4 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Memory xmlns:x="xdsl.xdef" x:extends="5_intent.xml">
+    <thought id="6" content="我将执行指定的bash脚本来检查广州天气。" />
+</Memory>

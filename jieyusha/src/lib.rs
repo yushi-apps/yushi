@@ -10,7 +10,7 @@ mod utils;
 mod error;
 pub mod memory;
 
-pub use chat::{chat, chat_stream};
+pub use chat::{chat, chat_stream, chat_stream_automation, AutomationContext};
 pub use llm::ModelProfile;
 pub use tool::{Tool, ToolUseContext, ToolResult};
 pub use error::{JieyushaError, Result};
