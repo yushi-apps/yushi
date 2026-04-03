@@ -549,13 +549,26 @@ fn generate_tools_xml() -> String {
 
 /// 检查是否需要生成摘要
 ///
-/// 当 history-actions 超过 10 条时触发
+/// 当最近的非 workspace action（intent/thought/toolcall）超过 10 条时触发，遇到 summary 则重置计数
 pub fn should_generate_summary(history_dir: &Path) -> bool {
     let files = scan_history_files(history_dir);
-    // 只计算非 workspace 的 action 文件
-    let action_count = files.iter()
-        .filter(|(_, name)| !name.contains("_workspace"))
-        .count();
+    let mut action_count = 0;
+
+    for (_, name) in files.iter() {
+        if name.contains("_workspace") {
+            continue;
+        }
+
+        if name.contains("_summary") {
+            // 发生过 summary 后，重新计数
+            action_count = 0;
+            continue;
+        }
+
+        // 统计 intent/thought/toolcall 等动作
+        action_count += 1;
+    }
+
     action_count > 10
 }
 
@@ -1080,8 +1093,20 @@ mod tests {
         for i in 1..=11 {
             create_intent_delta(root_path, &format!("intent {}", i)).unwrap();
         }
-        
-        // 应该触发摘要（超过 10 个）
+        assert!(should_generate_summary(&history_dir));
+
+        // 生成一次 summary, 计数应重置
+        create_summary_delta(root_path, "summary", 1, 11).unwrap();
+        assert!(!should_generate_summary(&history_dir));
+
+        // 增加 10 个 action（仍不触发）
+        for i in 12..=21 {
+            create_intent_delta(root_path, &format!("intent {}", i)).unwrap();
+        }
+        assert!(!should_generate_summary(&history_dir));
+
+        // 增加第 11 个 action，触发摘要
+        create_intent_delta(root_path, "intent 22").unwrap();
         assert!(should_generate_summary(&history_dir));
     }
     

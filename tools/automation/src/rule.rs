@@ -6,6 +6,7 @@
 //! - Rule configuration types
 
 use serde::{Deserialize, Serialize};
+use serde_json;
 use quick_xml::events::{BytesStart, Event};
 use quick_xml::Reader;
 
@@ -411,7 +412,56 @@ impl Rule {
     pub fn to_merge_xml_element(&self, patch: &RulePatch) -> String {
         rule_merge_xml_element(&self.id, patch)
     }
+    /// 生成与 Rule 对应的 task.xdef 计划
+    pub fn to_task_xdef(&self, source_session: &str) -> String {
+        let created_at_ms = chrono::Utc::now().timestamp_millis();
+        let description = if self.name.is_empty() {
+            format!("Rule {} execution", self.id)
+        } else {
+            self.name.clone()
+        };
 
+        // 以 Task 工具作为执行载体，直接使用规则 message 作为 prompt
+        let input_json = serde_json::json!({
+            "description": description,
+            "prompt": self.message,
+            "subagent_type": "schedule"
+        });
+
+        let mut xml = String::new();
+        xml.push_str("<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n");
+        xml.push_str(&format!(
+            "<task xmlns:x=\"/nop/schema/xdsl.xdef\" name=\"rule_{}\" source-session=\"{}\" created-at-ms=\"{}\">\n",
+            xml_escape(&self.id),
+            xml_escape(source_session),
+            created_at_ms
+        ));
+        xml.push_str("  <sequence name=\"main\">\n");
+        xml.push_str(&format!(
+            "    <call-tool name=\"{}\" tool=\"Task\">\n",
+            xml_escape(&self.id)
+        ));
+        xml.push_str("      <input name=\"description\" type=\"string\">\n");
+        xml.push_str(&format!(
+            "        <source xdef:value=\"{}\" />\n",
+            xml_escape(&description)
+        ));
+        xml.push_str("      </input>\n");
+        xml.push_str("      <input name=\"prompt\" type=\"string\">\n");
+        xml.push_str(&format!(
+            "        <source xdef:value=\"{}\" />\n",
+            xml_escape(&self.message)
+        ));
+        xml.push_str("      </input>\n");
+        xml.push_str("      <input name=\"subagent_type\" type=\"string\">\n");
+        xml.push_str("        <source xdef:value=\"schedule\" />\n");
+        xml.push_str("      </input>\n");
+        xml.push_str("    </call-tool>\n");
+        xml.push_str("  </sequence>\n");
+        xml.push_str("</task>\n");
+
+        xml
+    }
     /// 序列化为删除差量
     pub fn to_remove_xml_element(&self) -> String {
         format!("    <rule id=\"{}\" x:override=\"remove\" />", xml_escape(&self.id))

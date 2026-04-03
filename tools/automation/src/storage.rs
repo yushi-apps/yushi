@@ -331,10 +331,7 @@ impl Storage {
         }
     }
 
-    /// 读取 plan 文件，解析为步骤列表
-    /// 支持两种格式：
-    /// - 新格式：<step tool="..."><arguments>...</arguments></step>
-    /// - 旧格式：<step tool="..." arguments="..." />（兼容）
+    /// 读取 plan 文件，解析为步骤列表（仅支持新 task.xdef 格式）
     pub fn read_plan(&self, rule_id: &str) -> Option<Vec<PlanStep>> {
         let plan_path = self.plans_dir().join(format!("{}.task.xml", rule_id));
         if !plan_path.exists() {
@@ -349,68 +346,35 @@ impl Storage {
             }
         };
 
-        // 使用 quick-xml 解析 step 节点
         let mut steps = Vec::new();
         let mut reader = quick_xml::Reader::from_str(&content);
         reader.trim_text(true);
         let mut buf = Vec::new();
-        
-        // 当前正在解析的 step
-        let mut current_step: Option<(String, Option<String>)> = None;
+
+        let mut current_step_tool: Option<String> = None;
         let mut in_arguments = false;
         let mut arguments_content = String::new();
-        
+
         loop {
             match reader.read_event_into(&mut buf) {
                 Ok(quick_xml::events::Event::Start(ref e)) => {
                     let name = e.name();
                     let tag = std::str::from_utf8(name.as_ref()).unwrap_or("");
                     if tag == "step" {
-                        // 开始解析 step，提取 tool 属性
-                        let mut tool: Option<String> = None;
+                        current_step_tool = None;
                         for attr in e.attributes().flatten() {
                             let key = std::str::from_utf8(attr.key.as_ref()).unwrap_or("");
                             let val = std::str::from_utf8(&attr.value).unwrap_or("");
-                            let val = unescape_xml_attr(val);
                             if key == "tool" {
-                                tool = Some(val);
+                                current_step_tool = Some(unescape_xml_attr(val));
                             }
                         }
-                        if let Some(t) = tool {
-                            current_step = Some((t, None));
-                        }
-                    } else if tag == "arguments" && current_step.is_some() {
-                        // 进入 arguments 子元素
+                    } else if tag == "arguments" && current_step_tool.is_some() {
                         in_arguments = true;
                         arguments_content.clear();
                     }
                 }
-                Ok(quick_xml::events::Event::Empty(ref e)) => {
-                    let name = e.name();
-                    let tag = std::str::from_utf8(name.as_ref()).unwrap_or("");
-                    if tag == "step" {
-                        // 旧格式：<step tool="..." arguments="..." />
-                        let mut tool: Option<String> = None;
-                        let mut arguments: Option<String> = None;
-                        
-                        for attr in e.attributes().flatten() {
-                            let key = std::str::from_utf8(attr.key.as_ref()).unwrap_or("");
-                            let val = std::str::from_utf8(&attr.value).unwrap_or("");
-                            let val = unescape_xml_attr(val);
-                            match key {
-                                "tool" => tool = Some(val),
-                                "arguments" => arguments = Some(val),
-                                _ => {}
-                            }
-                        }
-                        
-                        if let (Some(t), Some(a)) = (tool, arguments) {
-                            steps.push(PlanStep { tool: t, arguments: a });
-                        }
-                    }
-                }
                 Ok(quick_xml::events::Event::Text(ref e)) => {
-                    // 读取 arguments 的文本内容
                     if in_arguments {
                         if let Ok(text) = e.unescape() {
                             arguments_content.push_str(&text);
@@ -421,24 +385,21 @@ impl Storage {
                     let name = e.name();
                     let tag = std::str::from_utf8(name.as_ref()).unwrap_or("");
                     if tag == "arguments" && in_arguments {
-                        // 结束 arguments，保存内容
                         in_arguments = false;
-                        if let Some((tool, _)) = &mut current_step {
-                            current_step = Some((tool.clone(), Some(arguments_content.clone())));
-                        }
                     } else if tag == "step" {
-                        // 结束 step，添加到结果
-                        if let Some((tool, args)) = current_step.take() {
-                            if let Some(arguments) = args {
-                                steps.push(PlanStep { tool, arguments });
-                            }
+                        if let Some(tool) = current_step_tool.take() {
+                            steps.push(PlanStep {
+                                tool,
+                                arguments: arguments_content.clone(),
+                            });
                         }
+                        arguments_content.clear();
                     }
                 }
                 Ok(quick_xml::events::Event::Eof) => break,
                 Err(e) => {
                     tracing::warn!(rule_id = %rule_id, error = %e, "XML parse error in plan file");
-                    break;
+                    return None;
                 }
                 _ => {}
             }
@@ -489,6 +450,41 @@ impl Storage {
             step_count = steps.len(),
             source_session = %source_session,
             "Plan saved to cache"
+        );
+
+        Ok(())
+    }
+
+    /// 保存从 Rule 生成的 task.xdef 原生文件
+    pub fn save_task_from_rule(&self, rule: &crate::rule::Rule, source_session: &str) -> anyhow::Result<()> {
+        let plans_dir = self.plans_dir();
+        std::fs::create_dir_all(&plans_dir)?;
+
+        let plan_path = plans_dir.join(format!("{}.task.xml", rule.id));
+        let task_xml = rule.to_task_xdef(source_session);
+        self.atomic_write(&plan_path, &task_xml)?;
+
+        tracing::info!(
+            rule_id = %rule.id,
+            plan_path = %plan_path.display(),
+            "Saved rule-generated task plan"
+        );
+
+        Ok(())
+    }
+
+    /// 保存原生 task.xdef 文本到 plan 缓存
+    pub fn save_task_xml(&self, rule_id: &str, task_xml: &str) -> anyhow::Result<()> {
+        let plans_dir = self.plans_dir();
+        std::fs::create_dir_all(&plans_dir)?;
+
+        let plan_path = plans_dir.join(format!("{}.task.xml", rule_id));
+        self.atomic_write(&plan_path, task_xml)?;
+
+        tracing::info!(
+            rule_id = %rule_id,
+            plan_path = %plan_path.display(),
+            "Saved raw task.xml to plan cache"
         );
 
         Ok(())
